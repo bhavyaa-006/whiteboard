@@ -1,4 +1,10 @@
-﻿const socket = io();
+﻿const socket = io({
+  transports: ["polling", "websocket"],
+  reconnection: true,
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 5000,
+  reconnectionAttempts: 5
+});
 
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");

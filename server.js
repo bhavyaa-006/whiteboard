@@ -3,15 +3,21 @@ const http = require("http");
 const path = require("path");
 const fs = require("fs");
 const { Server } = require("socket.io");
+const os = require("os");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  cors: { origin: "*" },
+  transports: ["polling", "websocket"],
+  pingInterval: 25000,
+  pingTimeout: 60000,
+});
 
 app.use(express.json({ limit: "20mb" }));
 
 const publicDir = path.join(__dirname, "public");
-const imagesDir = path.join(__dirname, "images");
+const imagesDir = process.env.TEMP_DIR || path.join(__dirname, "images");
 
 app.use(express.static(publicDir));
 app.use("/images", express.static(imagesDir));
