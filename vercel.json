@@ -1,21 +1,12 @@
 {
   "version": 2,
-  "public": true,
-  "buildCommand": "npm install",
   "builds": [
     {
-      "src": "package.json",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": "public/**"
-      }
+      "src": "server.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
-    {
-      "src": "/images/(.*)",
-      "dest": "/images/$1"
-    },
     {
       "src": "/(.*)",
       "dest": "server.js"

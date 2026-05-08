@@ -3,7 +3,6 @@ const http = require("http");
 const path = require("path");
 const fs = require("fs");
 const { Server } = require("socket.io");
-const os = require("os");
 
 const app = express();
 const server = http.createServer(app);
