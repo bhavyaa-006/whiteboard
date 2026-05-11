@@ -21,6 +21,8 @@ const imagesEl = document.getElementById("images");
 let drawing = false;
 let last = null;
 let shapeStart = null;
+let currentPoint = null;
+let shapePreview = null;
 
 function resize(){
   const data = canvas.toDataURL();
@@ -128,10 +130,12 @@ function drawCircle(start, end, color, size, useFill, fillColor){
   const y1 = start.y * canvas.height;
   const x2 = end.x * canvas.width;
   const y2 = end.y * canvas.height;
-  const radius = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+  const radius = Math.max(1, Math.min(Math.abs(x2 - x1), Math.abs(y2 - y1)) / 2);
+  const centerX = (x1 + x2) / 2;
+  const centerY = (y1 + y2) / 2;
   
   ctx.beginPath();
-  ctx.arc(x1, y1, radius, 0, Math.PI * 2);
+  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
   if (useFill) {
     ctx.fillStyle = fillColor;
     ctx.fill();
@@ -166,29 +170,34 @@ function drawTriangle(start, end, color, size, useFill, fillColor){
 
 canvas.addEventListener("pointerdown", (e)=>{
   drawing = true;
-  shapeStart = { x: e.clientX / canvas.width, y: e.clientY / canvas.height };
+  const rect = canvas.getBoundingClientRect();
+  shapeStart = { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height };
+  currentPoint = shapeStart;
   last = shapeStart;
+  if (shapeInput.value !== "pen") {
+    shapePreview = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  }
 });
 
 canvas.addEventListener("pointermove", (e)=>{
   if (!drawing) return;
   
-  const cur = { x: e.clientX / canvas.width, y: e.clientY / canvas.height };
+  const rect = canvas.getBoundingClientRect();
+  const cur = { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height };
   const color = colorPicker.value;
   const size = parseInt(sizeInput.value, 10);
   const brush = brushInput.value;
   const shape = shapeInput.value;
   const useFill = useFillCheckbox.checked;
   const fillColor = fillColorPicker.value;
+  currentPoint = cur;
   
   if (shape === "pen") {
     drawLine(last, cur, color, size, brush);
     sendLine(last, cur, color, size, brush, shape, useFill, fillColor);
     last = cur;
   } else {
-    // For shapes, redraw the entire canvas to show live preview
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    
+    if (shapePreview) ctx.putImageData(shapePreview, 0, 0);
     if (shape === "line") drawLine(shapeStart, cur, color, size, brush);
     else if (shape === "rectangle") drawRectangle(shapeStart, cur, color, size, useFill, fillColor);
     else if (shape === "circle") drawCircle(shapeStart, cur, color, size, useFill, fillColor);
@@ -204,7 +213,7 @@ canvas.addEventListener("pointerup", ()=>{
     const shape = shapeInput.value;
     const useFill = useFillCheckbox.checked;
     const fillColor = fillColorPicker.value;
-    const cur = last;
+    const cur = currentPoint || last || shapeStart;
     
     if (shape !== "pen") {
       sendLine(shapeStart, cur, color, size, brush, shape, useFill, fillColor);
@@ -214,9 +223,11 @@ canvas.addEventListener("pointerup", ()=>{
   drawing = false;
   last = null;
   shapeStart = null;
+  currentPoint = null;
+  shapePreview = null;
 });
 
-canvas.addEventListener("pointercancel", ()=>{ drawing=false; last=null; shapeStart=null; });
+canvas.addEventListener("pointercancel", ()=>{ drawing=false; last=null; shapeStart=null; currentPoint=null; shapePreview=null; });
 
 socket.on("draw", (data)=>{
   const { from, to, color, size, brush = "solid", shape = "pen", useFill = false, fillColor = "#FF0000" } = data;
