@@ -144,3 +144,57 @@ input[type="checkbox"] { width: 16px; height: 16px; border-radius: 4px; cursor: 
   border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; font-family: inherit;
 }
 .gallery-item button:hover { background: var(--text-main); color: #fff; }
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  /* Hide gallery on mobile to save screen space */
+  .bottom-right { display: none !important; }
+
+  /* Room Controls - Top Left */
+  .top-left { top: 10px; left: 10px; padding: 4px 8px; gap: 4px; }
+  .top-left .input-with-icon input { width: 80px; font-size: 11px; }
+  .top-left .input-with-icon { padding: 4px 6px; gap: 4px; }
+  .top-left .icon-btn { width: 28px; height: 28px; }
+  .status-indicator { font-size: 10px; padding: 2px 4px; }
+  
+  /* Actions - Top Right */
+  .top-right { top: 10px; right: 10px; padding: 4px; gap: 2px; }
+  .top-right .icon-btn { width: 32px; height: 32px; }
+
+  /* Toolbar - Move to Bottom Dock */
+  .top-center { 
+    top: auto; 
+    bottom: 10px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    width: calc(100% - 20px); 
+    justify-content: space-around;
+    padding: 8px;
+  }
+  .tool-group { gap: 2px; }
+  .tool-btn { width: 36px; height: 36px; }
+
+  /* Properties - Move Above Bottom Dock horizontally */
+  .middle-left {
+    top: auto;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: calc(100% - 20px);
+    padding: 8px;
+    gap: 12px;
+    justify-content: center;
+  }
+  .prop-group { 
+    flex-direction: row; 
+    align-items: center; 
+    width: auto; 
+    gap: 8px; 
+  }
+  .middle-left label { gap: 6px; font-size: 12px; }
+  input[type="range"] { width: 60px; }
+  .modern-select { padding: 4px 8px; font-size: 12px; }
+  input[type="color"] { width: 24px; height: 24px; }
+}
