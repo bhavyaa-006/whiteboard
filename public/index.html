@@ -34,8 +34,14 @@
           <option value="rectangle">Rectangle</option>
           <option value="circle">Circle</option>
           <option value="triangle">Triangle</option>
+          <option value="bucket">Bucket</option>
+          <option value="select">Select</option>
         </select>
       </label>
+    </div>
+
+    <div id="transformControls">
+      <label>Orientation <input id="rotation" type="range" min="0" max="359" value="0" disabled></label>
     </div>
 
     <div>
@@ -45,6 +51,7 @@
   </div>
 
   <canvas id="board"></canvas>
+  <canvas id="elements"></canvas>
 
   <div id="gallery">
     <h3>Saved Images</h3>

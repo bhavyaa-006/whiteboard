@@ -32,6 +32,14 @@ io.on("connection", (socket) => {
     socket.broadcast.emit("draw", data);
   });
 
+  socket.on("shape:add", (data) => {
+    socket.broadcast.emit("shape:add", data);
+  });
+
+  socket.on("shape:update", (data) => {
+    socket.broadcast.emit("shape:update", data);
+  });
+
   socket.on("clear", () => {
     io.emit("clear");
   });

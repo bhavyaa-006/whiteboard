@@ -1,17 +1,20 @@
-﻿const socket = io({
+const socket = io({
   transports: ["polling", "websocket"],
   reconnection: true,
   reconnectionDelay: 1000,
   reconnectionDelayMax: 5000,
-  reconnectionAttempts: 5
+  reconnectionAttempts: 5,
 });
 
-const canvas = document.getElementById("board");
-const ctx = canvas.getContext("2d");
+const baseCanvas = document.getElementById("board");
+const baseCtx = baseCanvas.getContext("2d");
+const shapeCanvas = document.getElementById("elements");
+const shapeCtx = shapeCanvas.getContext("2d");
 const colorPicker = document.getElementById("color");
 const sizeInput = document.getElementById("size");
 const brushInput = document.getElementById("brush");
 const shapeInput = document.getElementById("shape");
+const rotationInput = document.getElementById("rotation");
 const useFillCheckbox = document.getElementById("useFill");
 const fillColorPicker = document.getElementById("fillColor");
 const clearBtn = document.getElementById("clear");
@@ -22,250 +25,771 @@ let drawing = false;
 let last = null;
 let shapeStart = null;
 let currentPoint = null;
-let shapePreview = null;
+let selectedElementId = null;
+let draggingElement = false;
+let dragStartPoint = null;
+let dragOrigin = null;
+let draftElement = null;
+let shapeElements = [];
 
-function resize(){
-  const data = canvas.toDataURL();
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-  const img = new Image();
-  img.onload = ()=> ctx.drawImage(img,0,0);
-  img.src = data;
+function createId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+  return `shape-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-window.addEventListener("resize", resize);
-resize();
+function clonePoint(point) {
+  return { x: point.x, y: point.y };
+}
 
-// Toggle fill color input based on checkbox
+function cloneElement(element) {
+  return {
+    ...element,
+    from: clonePoint(element.from),
+    to: clonePoint(element.to),
+  };
+}
+
+function getCanvasPoint(event) {
+  const rect = shapeCanvas.getBoundingClientRect();
+  return {
+    x: (event.clientX - rect.left) / rect.width,
+    y: (event.clientY - rect.top) / rect.height,
+  };
+}
+
+function resizeCanvas(canvas, context, preserve = false) {
+  const dataUrl = preserve ? canvas.toDataURL() : null;
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  if (preserve && dataUrl) {
+    const image = new Image();
+    image.onload = () => context.drawImage(image, 0, 0);
+    image.src = dataUrl;
+  }
+}
+
+function resizeAll() {
+  const baseData = baseCanvas.toDataURL();
+  baseCanvas.width = window.innerWidth;
+  baseCanvas.height = window.innerHeight;
+  shapeCanvas.width = window.innerWidth;
+  shapeCanvas.height = window.innerHeight;
+
+  const image = new Image();
+  image.onload = () => baseCtx.drawImage(image, 0, 0);
+  image.src = baseData;
+  renderShapeLayer();
+}
+
+window.addEventListener("resize", resizeAll);
+resizeAll();
+
 useFillCheckbox.addEventListener("change", () => {
   fillColorPicker.disabled = !useFillCheckbox.checked;
 });
 
-function sendLine(from, to, color, size, brush, shape, useFill, fillColor){
+function sendLine(from, to, color, size, brush, shape, useFill, fillColor) {
   socket.emit("draw", { from, to, color, size, brush, shape, useFill, fillColor });
 }
 
-function drawDottedLine(from, to, color, size){
-  ctx.strokeStyle = color;
-  ctx.lineWidth = size;
-  ctx.setLineDash([size * 2, size * 2]);
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(from.x * canvas.width, from.y * canvas.height);
-  ctx.lineTo(to.x * canvas.width, to.y * canvas.height);
-  ctx.stroke();
-  ctx.setLineDash([]);
+function sendShapeEvent(eventName, element) {
+  socket.emit(eventName, element);
 }
 
-function drawDashedLine(from, to, color, size){
-  ctx.strokeStyle = color;
-  ctx.lineWidth = size;
-  ctx.setLineDash([size * 4, size * 2]);
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(from.x * canvas.width, from.y * canvas.height);
-  ctx.lineTo(to.x * canvas.width, to.y * canvas.height);
-  ctx.stroke();
-  ctx.setLineDash([]);
+function drawDottedLine(context, from, to, color, size) {
+  context.strokeStyle = color;
+  context.lineWidth = size;
+  context.setLineDash([size * 2, size * 2]);
+  context.lineCap = "round";
+  context.beginPath();
+  context.moveTo(from.x * context.canvas.width, from.y * context.canvas.height);
+  context.lineTo(to.x * context.canvas.width, to.y * context.canvas.height);
+  context.stroke();
+  context.setLineDash([]);
 }
 
-function drawSprayLine(from, to, color, size){
+function drawDashedLine(context, from, to, color, size) {
+  context.strokeStyle = color;
+  context.lineWidth = size;
+  context.setLineDash([size * 4, size * 2]);
+  context.lineCap = "round";
+  context.beginPath();
+  context.moveTo(from.x * context.canvas.width, from.y * context.canvas.height);
+  context.lineTo(to.x * context.canvas.width, to.y * context.canvas.height);
+  context.stroke();
+  context.setLineDash([]);
+}
+
+function drawSprayLine(context, from, to, color, size) {
   const distance = Math.sqrt(Math.pow(to.x - from.x, 2) + Math.pow(to.y - from.y, 2));
-  const steps = Math.ceil(distance * canvas.width);
-  
-  for(let i = 0; i < steps; i++){
+  const steps = Math.ceil(distance * context.canvas.width);
+
+  for (let i = 0; i < steps; i += 1) {
     const t = steps > 0 ? i / steps : 0;
-    const x = (from.x + (to.x - from.x) * t) * canvas.width;
-    const y = (from.y + (to.y - from.y) * t) * canvas.height;
-    
-    for(let j = 0; j < size * 3; j++){
+    const x = (from.x + (to.x - from.x) * t) * context.canvas.width;
+    const y = (from.y + (to.y - from.y) * t) * context.canvas.height;
+
+    for (let j = 0; j < size * 3; j += 1) {
       const angle = Math.random() * Math.PI * 2;
       const radius = Math.random() * size;
       const px = x + Math.cos(angle) * radius;
       const py = y + Math.sin(angle) * radius;
-      
-      ctx.fillStyle = color;
-      ctx.fillRect(px, py, 1, 1);
+
+      context.fillStyle = color;
+      context.fillRect(px, py, 1, 1);
     }
   }
 }
 
-function drawSolidLine(from, to, color, size){
-  ctx.strokeStyle = color;
-  ctx.lineWidth = size;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.beginPath();
-  ctx.moveTo(from.x * canvas.width, from.y * canvas.height);
-  ctx.lineTo(to.x * canvas.width, to.y * canvas.height);
-  ctx.stroke();
+function drawSolidLine(context, from, to, color, size) {
+  context.strokeStyle = color;
+  context.lineWidth = size;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.beginPath();
+  context.moveTo(from.x * context.canvas.width, from.y * context.canvas.height);
+  context.lineTo(to.x * context.canvas.width, to.y * context.canvas.height);
+  context.stroke();
 }
 
-function drawLine(from, to, color, size, brush = "solid"){
-  if (brush === "dotted") drawDottedLine(from, to, color, size);
-  else if (brush === "dashed") drawDashedLine(from, to, color, size);
-  else if (brush === "spray") drawSprayLine(from, to, color, size);
-  else drawSolidLine(from, to, color, size);
+function drawLine(context, from, to, color, size, brush = "solid") {
+  if (brush === "dotted") drawDottedLine(context, from, to, color, size);
+  else if (brush === "dashed") drawDashedLine(context, from, to, color, size);
+  else if (brush === "spray") drawSprayLine(context, from, to, color, size);
+  else drawSolidLine(context, from, to, color, size);
 }
 
-function drawRectangle(start, end, color, size, useFill, fillColor){
-  const x1 = start.x * canvas.width;
-  const y1 = start.y * canvas.height;
-  const x2 = end.x * canvas.width;
-  const y2 = end.y * canvas.height;
+function drawRectangle(context, start, end, color, size, useFill, fillColor) {
+  const x1 = start.x * context.canvas.width;
+  const y1 = start.y * context.canvas.height;
+  const x2 = end.x * context.canvas.width;
+  const y2 = end.y * context.canvas.height;
   const width = x2 - x1;
   const height = y2 - y1;
-  
+
   if (useFill) {
-    ctx.fillStyle = fillColor;
-    ctx.fillRect(x1, y1, width, height);
+    context.fillStyle = fillColor;
+    context.fillRect(x1, y1, width, height);
   }
-  ctx.strokeStyle = color;
-  ctx.lineWidth = size;
-  ctx.strokeRect(x1, y1, width, height);
+  context.strokeStyle = color;
+  context.lineWidth = size;
+  context.strokeRect(x1, y1, width, height);
 }
 
-function drawCircle(start, end, color, size, useFill, fillColor){
-  const x1 = start.x * canvas.width;
-  const y1 = start.y * canvas.height;
-  const x2 = end.x * canvas.width;
-  const y2 = end.y * canvas.height;
+function drawCircle(context, start, end, color, size, useFill, fillColor) {
+  const x1 = start.x * context.canvas.width;
+  const y1 = start.y * context.canvas.height;
+  const x2 = end.x * context.canvas.width;
+  const y2 = end.y * context.canvas.height;
   const radius = Math.max(1, Math.min(Math.abs(x2 - x1), Math.abs(y2 - y1)) / 2);
   const centerX = (x1 + x2) / 2;
   const centerY = (y1 + y2) / 2;
-  
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+
+  context.beginPath();
+  context.arc(centerX, centerY, radius, 0, Math.PI * 2);
   if (useFill) {
-    ctx.fillStyle = fillColor;
-    ctx.fill();
+    context.fillStyle = fillColor;
+    context.fill();
   }
-  ctx.strokeStyle = color;
-  ctx.lineWidth = size;
-  ctx.stroke();
+  context.strokeStyle = color;
+  context.lineWidth = size;
+  context.stroke();
 }
 
-function drawTriangle(start, end, color, size, useFill, fillColor){
-  const x1 = start.x * canvas.width;
-  const y1 = start.y * canvas.height;
-  const x2 = end.x * canvas.width;
-  const y2 = end.y * canvas.height;
+function drawTriangle(context, start, end, color, size, useFill, fillColor) {
+  const x1 = start.x * context.canvas.width;
+  const y1 = start.y * context.canvas.height;
+  const x2 = end.x * context.canvas.width;
+  const y2 = end.y * context.canvas.height;
   const width = x2 - x1;
   const height = y2 - y1;
-  
-  ctx.beginPath();
-  ctx.moveTo(x1 + width / 2, y1);
-  ctx.lineTo(x2, y2);
-  ctx.lineTo(x1, y2);
-  ctx.closePath();
-  
+
+  context.beginPath();
+  context.moveTo(x1 + width / 2, y1);
+  context.lineTo(x2, y2);
+  context.lineTo(x1, y2);
+  context.closePath();
+
   if (useFill) {
-    ctx.fillStyle = fillColor;
-    ctx.fill();
+    context.fillStyle = fillColor;
+    context.fill();
   }
-  ctx.strokeStyle = color;
-  ctx.lineWidth = size;
-  ctx.stroke();
+  context.strokeStyle = color;
+  context.lineWidth = size;
+  context.stroke();
 }
 
-canvas.addEventListener("pointerdown", (e)=>{
-  drawing = true;
-  const rect = canvas.getBoundingClientRect();
-  shapeStart = { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height };
-  currentPoint = shapeStart;
-  last = shapeStart;
-  if (shapeInput.value !== "pen") {
-    shapePreview = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  }
-});
+function hexToRgba(hex) {
+  const normalized = hex.replace("#", "");
+  const expanded = normalized.length === 3
+    ? normalized.split("").map((char) => char + char).join("")
+    : normalized;
+  const intValue = parseInt(expanded, 16);
+  return [
+    (intValue >> 16) & 255,
+    (intValue >> 8) & 255,
+    intValue & 255,
+    255,
+  ];
+}
 
-canvas.addEventListener("pointermove", (e)=>{
-  if (!drawing) return;
-  
-  const rect = canvas.getBoundingClientRect();
-  const cur = { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height };
-  const color = colorPicker.value;
-  const size = parseInt(sizeInput.value, 10);
-  const brush = brushInput.value;
-  const shape = shapeInput.value;
-  const useFill = useFillCheckbox.checked;
-  const fillColor = fillColorPicker.value;
-  currentPoint = cur;
-  
-  if (shape === "pen") {
-    drawLine(last, cur, color, size, brush);
-    sendLine(last, cur, color, size, brush, shape, useFill, fillColor);
-    last = cur;
-  } else {
-    if (shapePreview) ctx.putImageData(shapePreview, 0, 0);
-    if (shape === "line") drawLine(shapeStart, cur, color, size, brush);
-    else if (shape === "rectangle") drawRectangle(shapeStart, cur, color, size, useFill, fillColor);
-    else if (shape === "circle") drawCircle(shapeStart, cur, color, size, useFill, fillColor);
-    else if (shape === "triangle") drawTriangle(shapeStart, cur, color, size, useFill, fillColor);
-  }
-});
+function colorsMatch(data, index, target) {
+  return data[index] === target[0]
+    && data[index + 1] === target[1]
+    && data[index + 2] === target[2]
+    && data[index + 3] === target[3];
+}
 
-canvas.addEventListener("pointerup", ()=>{
-  if (drawing && shapeStart) {
-    const color = colorPicker.value;
-    const size = parseInt(sizeInput.value, 10);
-    const brush = brushInput.value;
-    const shape = shapeInput.value;
-    const useFill = useFillCheckbox.checked;
-    const fillColor = fillColorPicker.value;
-    const cur = currentPoint || last || shapeStart;
-    
-    if (shape !== "pen") {
-      sendLine(shapeStart, cur, color, size, brush, shape, useFill, fillColor);
+function bucketFill(startPoint, fillColor) {
+  const x = Math.floor(startPoint.x * baseCanvas.width);
+  const y = Math.floor(startPoint.y * baseCanvas.height);
+
+  if (x < 0 || y < 0 || x >= baseCanvas.width || y >= baseCanvas.height) return;
+
+  const imageData = baseCtx.getImageData(0, 0, baseCanvas.width, baseCanvas.height);
+  const { data, width, height } = imageData;
+  const targetIndex = (y * width + x) * 4;
+  const targetColor = [
+    data[targetIndex],
+    data[targetIndex + 1],
+    data[targetIndex + 2],
+    data[targetIndex + 3],
+  ];
+  const replacementColor = hexToRgba(fillColor);
+
+  if (colorsMatch(data, targetIndex, replacementColor)) return;
+
+  const stack = [[x, y]];
+
+  while (stack.length) {
+    const [startX, startY] = stack.pop();
+
+    if (startX < 0 || startX >= width || startY < 0 || startY >= height) continue;
+
+    let left = startX;
+    let right = startX;
+    let currentIndex = (startY * width + startX) * 4;
+
+    while (left >= 0 && colorsMatch(data, currentIndex, targetColor)) {
+      left -= 1;
+      currentIndex -= 4;
+    }
+
+    left += 1;
+    currentIndex = (startY * width + startX) * 4;
+
+    while (right < width && colorsMatch(data, currentIndex, targetColor)) {
+      right += 1;
+      currentIndex += 4;
+    }
+
+    right -= 1;
+
+    for (let fillX = left; fillX <= right; fillX += 1) {
+      const pixelIndex = (startY * width + fillX) * 4;
+      data[pixelIndex] = replacementColor[0];
+      data[pixelIndex + 1] = replacementColor[1];
+      data[pixelIndex + 2] = replacementColor[2];
+      data[pixelIndex + 3] = replacementColor[3];
+    }
+
+    for (const neighborY of [startY - 1, startY + 1]) {
+      if (neighborY < 0 || neighborY >= height) continue;
+
+      let fillRun = false;
+      for (let fillX = left; fillX <= right; fillX += 1) {
+        const neighborIndex = (neighborY * width + fillX) * 4;
+        if (colorsMatch(data, neighborIndex, targetColor)) {
+          if (!fillRun) {
+            stack.push([fillX, neighborY]);
+            fillRun = true;
+          }
+        } else {
+          fillRun = false;
+        }
+      }
     }
   }
-  
+
+  baseCtx.putImageData(imageData, 0, 0);
+}
+
+function createShapeElement(type, from, to, color, size, brush, useFill, fillColor, rotation = 0) {
+  return {
+    id: createId(),
+    type,
+    from: clonePoint(from),
+    to: clonePoint(to),
+    color,
+    size,
+    brush,
+    useFill,
+    fillColor,
+    rotation,
+  };
+}
+
+function getElementFrame(element) {
+  const x1 = element.from.x * shapeCanvas.width;
+  const y1 = element.from.y * shapeCanvas.height;
+  const x2 = element.to.x * shapeCanvas.width;
+  const y2 = element.to.y * shapeCanvas.height;
+  const center = { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
+  const width = Math.abs(x2 - x1);
+  const height = Math.abs(y2 - y1);
+  const rotation = (element.rotation || 0) * Math.PI / 180;
+  const baseAngle = Math.atan2(y2 - y1, x2 - x1);
+  const angle = element.type === "line" ? baseAngle + rotation : rotation;
+  const length = Math.hypot(x2 - x1, y2 - y1);
+  return { center, width, height, length, angle };
+}
+
+function toLocalPoint(point, center, angle) {
+  const dx = point.x - center.x;
+  const dy = point.y - center.y;
+  const cos = Math.cos(-angle);
+  const sin = Math.sin(-angle);
+  return {
+    x: dx * cos - dy * sin,
+    y: dx * sin + dy * cos,
+  };
+}
+
+function getTransformedPoints(element) {
+  const frame = getElementFrame(element);
+  const angle = frame.angle;
+  const center = frame.center;
+
+  if (element.type === "circle") {
+    const radius = Math.max(1, Math.min(frame.width, frame.height) / 2);
+    return [
+      { x: center.x - radius, y: center.y - radius },
+      { x: center.x + radius, y: center.y - radius },
+      { x: center.x + radius, y: center.y + radius },
+      { x: center.x - radius, y: center.y + radius },
+    ];
+  }
+
+  if (element.type === "line") {
+    const halfLength = frame.length / 2;
+    return [
+      { x: center.x - halfLength * Math.cos(angle), y: center.y - halfLength * Math.sin(angle) },
+      { x: center.x + halfLength * Math.cos(angle), y: center.y + halfLength * Math.sin(angle) },
+    ];
+  }
+
+  if (element.type === "triangle") {
+    const points = [
+      { x: 0, y: -frame.height / 2 },
+      { x: frame.width / 2, y: frame.height / 2 },
+      { x: -frame.width / 2, y: frame.height / 2 },
+    ];
+    return points.map((point) => {
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      return {
+        x: center.x + point.x * cos - point.y * sin,
+        y: center.y + point.x * sin + point.y * cos,
+      };
+    });
+  }
+
+  const corners = [
+    { x: -frame.width / 2, y: -frame.height / 2 },
+    { x: frame.width / 2, y: -frame.height / 2 },
+    { x: frame.width / 2, y: frame.height / 2 },
+    { x: -frame.width / 2, y: frame.height / 2 },
+  ];
+
+  return corners.map((point) => {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    return {
+      x: center.x + point.x * cos - point.y * sin,
+      y: center.y + point.x * sin + point.y * cos,
+    };
+  });
+}
+
+function getElementBounds(element) {
+  const points = getTransformedPoints(element);
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  return {
+    left: Math.min(...xs),
+    top: Math.min(...ys),
+    right: Math.max(...xs),
+    bottom: Math.max(...ys),
+  };
+}
+
+function pointInTriangle(point, a, b, c) {
+  const v0x = c.x - a.x;
+  const v0y = c.y - a.y;
+  const v1x = b.x - a.x;
+  const v1y = b.y - a.y;
+  const v2x = point.x - a.x;
+  const v2y = point.y - a.y;
+
+  const dot00 = v0x * v0x + v0y * v0y;
+  const dot01 = v0x * v1x + v0y * v1y;
+  const dot02 = v0x * v2x + v0y * v2y;
+  const dot11 = v1x * v1x + v1y * v1y;
+  const dot12 = v1x * v2x + v1y * v2y;
+  const invDenom = 1 / (dot00 * dot11 - dot01 * dot01);
+  const u = (dot11 * dot02 - dot01 * dot12) * invDenom;
+  const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+  return u >= 0 && v >= 0 && (u + v) <= 1;
+}
+
+function hitTestElement(element, point) {
+  const frame = getElementFrame(element);
+  const pixelPoint = { x: point.x * shapeCanvas.width, y: point.y * shapeCanvas.height };
+  const localPoint = toLocalPoint(pixelPoint, frame.center, frame.angle);
+
+  if (element.type === "line") {
+    const halfLength = frame.length / 2;
+    const tolerance = Math.max(8, (element.size || 1) / 2 + 4);
+    return Math.abs(localPoint.y) <= tolerance && localPoint.x >= -halfLength - tolerance && localPoint.x <= halfLength + tolerance;
+  }
+
+  if (element.type === "circle") {
+    const radius = Math.max(1, Math.min(frame.width, frame.height) / 2);
+    return Math.sqrt(Math.pow(localPoint.x, 2) + Math.pow(localPoint.y, 2)) <= radius;
+  }
+
+  if (element.type === "triangle") {
+    const trianglePoints = [
+      { x: 0, y: -frame.height / 2 },
+      { x: frame.width / 2, y: frame.height / 2 },
+      { x: -frame.width / 2, y: frame.height / 2 },
+    ];
+    return pointInTriangle(localPoint, trianglePoints[0], trianglePoints[1], trianglePoints[2]);
+  }
+
+  return Math.abs(localPoint.x) <= frame.width / 2 && Math.abs(localPoint.y) <= frame.height / 2;
+}
+
+function drawShapeElement(context, element, highlight = false) {
+  const frame = getElementFrame(element);
+  context.save();
+  context.strokeStyle = element.color;
+  context.lineWidth = element.size;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+
+  if (element.type === "line") {
+    context.translate(frame.center.x, frame.center.y);
+    context.rotate(frame.angle);
+    drawLine(context, { x: -frame.length / 2 / context.canvas.width, y: 0 }, { x: frame.length / 2 / context.canvas.width, y: 0 }, element.color, element.size, element.brush);
+  } else if (element.type === "rectangle") {
+    context.translate(frame.center.x, frame.center.y);
+    context.rotate(frame.angle);
+    if (element.useFill) {
+      context.fillStyle = element.fillColor;
+      context.fillRect(-frame.width / 2, -frame.height / 2, frame.width, frame.height);
+    }
+    context.strokeStyle = element.color;
+    context.strokeRect(-frame.width / 2, -frame.height / 2, frame.width, frame.height);
+  } else if (element.type === "circle") {
+    const radius = Math.max(1, Math.min(frame.width, frame.height) / 2);
+    context.beginPath();
+    context.arc(frame.center.x, frame.center.y, radius, 0, Math.PI * 2);
+    if (element.useFill) {
+      context.fillStyle = element.fillColor;
+      context.fill();
+    }
+    context.strokeStyle = element.color;
+    context.stroke();
+  } else if (element.type === "triangle") {
+    context.translate(frame.center.x, frame.center.y);
+    context.rotate(frame.angle);
+    context.beginPath();
+    context.moveTo(0, -frame.height / 2);
+    context.lineTo(frame.width / 2, frame.height / 2);
+    context.lineTo(-frame.width / 2, frame.height / 2);
+    context.closePath();
+    if (element.useFill) {
+      context.fillStyle = element.fillColor;
+      context.fill();
+    }
+    context.strokeStyle = element.color;
+    context.stroke();
+  }
+
+  if (highlight) {
+    const bounds = getElementBounds(element);
+    context.save();
+    context.setLineDash([8, 6]);
+    context.strokeStyle = "#00A3FF";
+    context.lineWidth = 1;
+    context.strokeRect(bounds.left - 6, bounds.top - 6, bounds.right - bounds.left + 12, bounds.bottom - bounds.top + 12);
+    context.restore();
+  }
+
+  context.restore();
+}
+
+function renderShapeLayer() {
+  shapeCtx.clearRect(0, 0, shapeCanvas.width, shapeCanvas.height);
+  shapeElements.forEach((element) => {
+    drawShapeElement(shapeCtx, element, element.id === selectedElementId);
+  });
+  if (draftElement) {
+    drawShapeElement(shapeCtx, draftElement, false);
+  }
+}
+
+function syncRotationControl() {
+  const selectedElement = shapeElements.find((element) => element.id === selectedElementId);
+  const isSelectable = Boolean(selectedElement);
+  rotationInput.disabled = !isSelectable;
+  if (isSelectable) {
+    rotationInput.value = String(Math.round(selectedElement.rotation || 0) % 360);
+  } else {
+    rotationInput.value = "0";
+  }
+}
+
+function addShapeElement(element, broadcast = true) {
+  shapeElements.push(element);
+  if (broadcast) sendShapeEvent("shape:add", element);
+  renderShapeLayer();
+}
+
+function updateShapeElement(updatedElement, broadcast = true) {
+  const index = shapeElements.findIndex((element) => element.id === updatedElement.id);
+  if (index === -1) return;
+  shapeElements[index] = cloneElement(updatedElement);
+  if (broadcast) sendShapeEvent("shape:update", updatedElement);
+  renderShapeLayer();
+  syncRotationControl();
+}
+
+function clearAll() {
+  baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
+  shapeElements = [];
+  selectedElementId = null;
+  draftElement = null;
   drawing = false;
   last = null;
   shapeStart = null;
   currentPoint = null;
-  shapePreview = null;
+  draggingElement = false;
+  dragStartPoint = null;
+  dragOrigin = null;
+  syncRotationControl();
+  renderShapeLayer();
+}
+
+function createShapeFromTool(tool, from, to) {
+  const color = colorPicker.value;
+  const size = parseInt(sizeInput.value, 10);
+  const brush = brushInput.value;
+  const useFill = useFillCheckbox.checked;
+  const fillColor = fillColorPicker.value;
+  return createShapeElement(tool, from, to, color, size, brush, useFill, fillColor, 0);
+}
+
+baseCanvas.addEventListener("pointerdown", () => {});
+
+shapeCanvas.addEventListener("pointerdown", (event) => {
+  const tool = shapeInput.value;
+  const point = getCanvasPoint(event);
+
+  if (tool === "pen") {
+    drawing = true;
+    last = point;
+    shapeStart = point;
+    currentPoint = point;
+    return;
+  }
+
+  if (tool === "bucket") {
+    const bucketColor = useFillCheckbox.checked ? fillColorPicker.value : colorPicker.value;
+    bucketFill(point, bucketColor);
+    sendLine(point, point, bucketColor, 0, "solid", "bucket", false, bucketColor);
+    return;
+  }
+
+  if (tool === "select") {
+    const hitElement = [...shapeElements].reverse().find((element) => hitTestElement(element, point));
+    if (!hitElement) {
+      selectedElementId = null;
+      draggingElement = false;
+      dragOrigin = null;
+      dragStartPoint = null;
+      syncRotationControl();
+      renderShapeLayer();
+      return;
+    }
+
+    selectedElementId = hitElement.id;
+    draggingElement = true;
+    dragStartPoint = point;
+    dragOrigin = cloneElement(hitElement);
+    syncRotationControl();
+    renderShapeLayer();
+    shapeCanvas.setPointerCapture(event.pointerId);
+    return;
+  }
+
+  drawing = true;
+  shapeStart = point;
+  currentPoint = point;
+  draftElement = createShapeFromTool(tool, point, point);
+  shapeCanvas.setPointerCapture(event.pointerId);
+  renderShapeLayer();
 });
 
-canvas.addEventListener("pointercancel", ()=>{ drawing=false; last=null; shapeStart=null; currentPoint=null; shapePreview=null; });
+shapeCanvas.addEventListener("pointermove", (event) => {
+  const point = getCanvasPoint(event);
+  const tool = shapeInput.value;
 
-socket.on("draw", (data)=>{
+  if (tool === "pen" && drawing) {
+    const color = colorPicker.value;
+    const size = parseInt(sizeInput.value, 10);
+    const brush = brushInput.value;
+    drawLine(baseCtx, last, point, color, size, brush);
+    sendLine(last, point, color, size, brush, tool, false, fillColorPicker.value);
+    last = point;
+    currentPoint = point;
+    return;
+  }
+
+  if (tool === "select" && draggingElement && selectedElementId && dragOrigin) {
+    const delta = { x: point.x - dragStartPoint.x, y: point.y - dragStartPoint.y };
+    const activeElement = shapeElements.find((element) => element.id === selectedElementId);
+    if (!activeElement) return;
+    activeElement.from = { x: dragOrigin.from.x + delta.x, y: dragOrigin.from.y + delta.y };
+    activeElement.to = { x: dragOrigin.to.x + delta.x, y: dragOrigin.to.y + delta.y };
+    renderShapeLayer();
+    return;
+  }
+
+  if (!drawing || !draftElement) return;
+  draftElement.to = clonePoint(point);
+  currentPoint = point;
+  renderShapeLayer();
+});
+
+shapeCanvas.addEventListener("pointerup", (event) => {
+  const tool = shapeInput.value;
+
+  if (tool === "select" && draggingElement && selectedElementId) {
+    const activeElement = shapeElements.find((element) => element.id === selectedElementId);
+    if (activeElement) {
+      updateShapeElement(activeElement, true);
+    }
+    draggingElement = false;
+    dragOrigin = null;
+    dragStartPoint = null;
+    return;
+  }
+
+  if (tool === "pen") {
+    drawing = false;
+    last = null;
+    shapeStart = null;
+    currentPoint = null;
+    return;
+  }
+
+  if (drawing && draftElement) {
+    draftElement.to = getCanvasPoint(event);
+    addShapeElement(cloneElement(draftElement), true);
+    draftElement = null;
+  }
+
+  drawing = false;
+  last = null;
+  shapeStart = null;
+  currentPoint = null;
+});
+
+shapeCanvas.addEventListener("pointercancel", () => {
+  drawing = false;
+  last = null;
+  shapeStart = null;
+  currentPoint = null;
+  draggingElement = false;
+  dragOrigin = null;
+  dragStartPoint = null;
+  draftElement = null;
+  renderShapeLayer();
+});
+
+rotationInput.addEventListener("input", () => {
+  const selectedElement = shapeElements.find((element) => element.id === selectedElementId);
+  if (!selectedElement) return;
+  selectedElement.rotation = Number(rotationInput.value);
+  renderShapeLayer();
+});
+
+rotationInput.addEventListener("change", () => {
+  const selectedElement = shapeElements.find((element) => element.id === selectedElementId);
+  if (!selectedElement) return;
+  updateShapeElement(selectedElement, true);
+});
+
+socket.on("draw", (data) => {
   const { from, to, color, size, brush = "solid", shape = "pen", useFill = false, fillColor = "#FF0000" } = data;
-  
+
   if (shape === "pen") {
-    drawLine(from, to, color, size, brush);
-  } else if (shape === "line") {
-    drawLine(from, to, color, size, brush);
-  } else if (shape === "rectangle") {
-    drawRectangle(from, to, color, size, useFill, fillColor);
-  } else if (shape === "circle") {
-    drawCircle(from, to, color, size, useFill, fillColor);
-  } else if (shape === "triangle") {
-    drawTriangle(from, to, color, size, useFill, fillColor);
+    drawLine(baseCtx, from, to, color, size, brush);
+  } else if (shape === "bucket") {
+    bucketFill(from || to, color);
   }
 });
 
-clearBtn.addEventListener("click", ()=>{
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+socket.on("shape:add", (element) => {
+  if (shapeElements.some((existing) => existing.id === element.id)) return;
+  shapeElements.push(cloneElement(element));
+  renderShapeLayer();
+});
+
+socket.on("shape:update", (element) => {
+  const index = shapeElements.findIndex((existing) => existing.id === element.id);
+  if (index === -1) return;
+  shapeElements[index] = cloneElement(element);
+  renderShapeLayer();
+  syncRotationControl();
+});
+
+clearBtn.addEventListener("click", () => {
+  clearAll();
   socket.emit("clear");
 });
 
-socket.on("clear", ()=>{
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+socket.on("clear", () => {
+  clearAll();
 });
 
-async function saveCanvas(){
-  const dataUrl = canvas.toDataURL("image/png");
-  try{
-    const res = await fetch("/save-image", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ imageData: dataUrl }) });
-    const j = await res.json();
-    if (j.url) {
+async function saveCanvas() {
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = baseCanvas.width;
+  exportCanvas.height = baseCanvas.height;
+  const exportCtx = exportCanvas.getContext("2d");
+  exportCtx.drawImage(baseCanvas, 0, 0);
+  exportCtx.drawImage(shapeCanvas, 0, 0);
+  const dataUrl = exportCanvas.toDataURL("image/png");
+
+  try {
+    const res = await fetch("/save-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageData: dataUrl }),
+    });
+    const result = await res.json();
+    if (result.url) {
       await refreshGallery();
       alert("Saved to server");
     } else {
       alert("Save failed");
     }
-  } catch (err){
+  } catch (err) {
     console.error(err);
     alert("Save error");
   }
@@ -273,17 +797,19 @@ async function saveCanvas(){
 
 saveBtn.addEventListener("click", saveCanvas);
 
-async function refreshGallery(){
-  try{
+async function refreshGallery() {
+  try {
     const res = await fetch("/list-images");
     const list = await res.json();
     imagesEl.innerHTML = "";
-    list.reverse().forEach(url => {
+    list.reverse().forEach((url) => {
       const img = document.createElement("img");
       img.src = url;
       imagesEl.appendChild(img);
     });
-  } catch (err){ console.error(err); }
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 refreshGallery();
