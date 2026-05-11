@@ -1,3 +1,21 @@
+function createRoomId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return `room-${window.crypto.randomUUID().slice(0, 8)}`;
+  }
+  return `room-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function getRoomIdFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("room");
+}
+
+function getInviteLink(roomId) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("room", roomId);
+  return url.toString();
+}
+
 const socket = io({
   transports: ["polling", "websocket"],
   reconnection: true,
@@ -19,6 +37,10 @@ const useFillCheckbox = document.getElementById("useFill");
 const fillColorPicker = document.getElementById("fillColor");
 const clearBtn = document.getElementById("clear");
 const saveBtn = document.getElementById("save");
+const downloadBtn = document.getElementById("download");
+const roomInput = document.getElementById("room");
+const newRoomBtn = document.getElementById("newRoom");
+const copyRoomBtn = document.getElementById("copyRoom");
 const imagesEl = document.getElementById("images");
 
 let drawing = false;
@@ -31,12 +53,73 @@ let dragStartPoint = null;
 let dragOrigin = null;
 let draftElement = null;
 let shapeElements = [];
+let currentRoomId = getRoomIdFromUrl() || createRoomId();
+
+function syncRoomUrl(roomId, replace = false) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("room", roomId);
+  window.history[replace ? "replaceState" : "pushState"]({}, "", url);
+}
+
+function setCurrentRoom(roomId, replace = false) {
+  currentRoomId = roomId;
+  roomInput.value = roomId;
+  syncRoomUrl(roomId, replace);
+  socket.emit("join-room", roomId);
+}
+
+setCurrentRoom(currentRoomId, true);
+
+socket.on("connect", () => {
+  socket.emit("join-room", currentRoomId);
+});
+
+newRoomBtn.addEventListener("click", async () => {
+  clearAll();
+  const nextRoomId = createRoomId();
+  setCurrentRoom(nextRoomId);
+
+  try {
+    await navigator.clipboard.writeText(getInviteLink(nextRoomId));
+  } catch {
+    // Clipboard can fail on some browsers; the invite link is still in the URL.
+  }
+});
+
+copyRoomBtn.addEventListener("click", async () => {
+  const inviteLink = getInviteLink(currentRoomId);
+  try {
+    await navigator.clipboard.writeText(inviteLink);
+  } catch {
+    alert(inviteLink);
+  }
+});
 
 function createId() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") {
     return window.crypto.randomUUID();
   }
   return `shape-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function getFilenameFromUrl(url, fallbackPrefix = "image") {
+  try {
+    const parsedUrl = new URL(url, window.location.href);
+    const pathname = parsedUrl.pathname.split("/").filter(Boolean);
+    return pathname.length ? pathname[pathname.length - 1] : `${fallbackPrefix}.png`;
+  } catch {
+    return `${fallbackPrefix}.png`;
+  }
+}
+
+function triggerDownload(blobUrl, filename) {
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 function clonePoint(point) {
@@ -797,15 +880,58 @@ async function saveCanvas() {
 
 saveBtn.addEventListener("click", saveCanvas);
 
+async function downloadCanvas() {
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = baseCanvas.width;
+  exportCanvas.height = baseCanvas.height;
+  const exportCtx = exportCanvas.getContext("2d");
+  exportCtx.drawImage(baseCanvas, 0, 0);
+  exportCtx.drawImage(shapeCanvas, 0, 0);
+
+  const blob = await new Promise((resolve) => exportCanvas.toBlob(resolve, "image/png"));
+  if (!blob) {
+    alert("Download failed");
+    return;
+  }
+
+  const blobUrl = URL.createObjectURL(blob);
+  triggerDownload(blobUrl, `whiteboard-${Date.now()}.png`);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+}
+
+downloadBtn.addEventListener("click", downloadCanvas);
+
 async function refreshGallery() {
   try {
     const res = await fetch("/list-images");
     const list = await res.json();
     imagesEl.innerHTML = "";
     list.reverse().forEach((url) => {
+      const item = document.createElement("div");
+      item.className = "gallery-item";
+
       const img = document.createElement("img");
       img.src = url;
-      imagesEl.appendChild(img);
+
+      const download = document.createElement("button");
+      download.type = "button";
+      download.textContent = "Download";
+      download.addEventListener("click", async () => {
+        try {
+          const response = await fetch(url);
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          triggerDownload(blobUrl, getFilenameFromUrl(url));
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+        } catch (err) {
+          console.error(err);
+          alert("Download failed");
+        }
+      });
+
+      item.appendChild(img);
+      item.appendChild(download);
+      imagesEl.appendChild(item);
     });
   } catch (err) {
     console.error(err);

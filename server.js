@@ -28,20 +28,39 @@ if (!fs.existsSync(imagesDir)) {
 io.on("connection", (socket) => {
   console.log("socket connected", socket.id);
 
+  socket.on("join-room", (roomId) => {
+    if (!roomId || typeof roomId !== "string") return;
+
+    for (const room of socket.rooms) {
+      if (room !== socket.id) {
+        socket.leave(room);
+      }
+    }
+
+    socket.join(roomId);
+    socket.data.roomId = roomId;
+  });
+
+  function emitToRoom(eventName, data) {
+    const roomId = socket.data.roomId;
+    if (!roomId) return;
+    socket.to(roomId).emit(eventName, data);
+  }
+
   socket.on("draw", (data) => {
-    socket.broadcast.emit("draw", data);
+    emitToRoom("draw", data);
   });
 
   socket.on("shape:add", (data) => {
-    socket.broadcast.emit("shape:add", data);
+    emitToRoom("shape:add", data);
   });
 
   socket.on("shape:update", (data) => {
-    socket.broadcast.emit("shape:update", data);
+    emitToRoom("shape:update", data);
   });
 
   socket.on("clear", () => {
-    io.emit("clear");
+    emitToRoom("clear");
   });
 });
 
