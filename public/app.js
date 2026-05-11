@@ -40,7 +40,8 @@ const socket = io(backendBaseUrl, {
   reconnection: true,
   reconnectionDelay: 500,
   reconnectionDelayMax: 3000,
-  reconnectionAttempts: 10,
+  reconnectionAttempts: Infinity,
+  timeout: 60000,
 });
 
 const baseCanvas = document.getElementById("board");
@@ -124,7 +125,7 @@ socket.on("disconnect", () => {
 
 socket.on("connect_error", (err) => {
   console.error("Connection error:", err);
-  connectionStatus.textContent = "● error";
+  connectionStatus.textContent = "● reconnecting";
   connectionStatus.style.color = "#ef4444";
 });
 
