@@ -19,15 +19,6 @@ app.use(express.json({ limit: "20mb" }));
 const publicDir = path.join(__dirname, "public");
 const imagesDir = process.env.TEMP_DIR || path.join(__dirname, "images");
 
-io.on("connection", (socket) => {
-  const transport = socket.conn.transport.name;
-  console.log(`[${new Date().toISOString()}] Connected via ${transport}`);
-
-  socket.on("disconnect", (reason) => {
-    console.log(`[${new Date().toISOString()}] Disconnected: ${reason}`);
-  });
-});
-
 app.use(express.static(publicDir));
 app.use("/images", express.static(imagesDir));
 
@@ -36,7 +27,8 @@ if (!fs.existsSync(imagesDir)) {
 }
 
 io.on("connection", (socket) => {
-  console.log("socket connected", socket.id);
+  const transport = socket.conn.transport.name;
+  console.log(`[${new Date().toISOString()}] Connected via ${transport}, id: ${socket.id}`);
 
   socket.on("join-room", (roomId) => {
     if (!roomId || typeof roomId !== "string") return;
@@ -71,6 +63,10 @@ io.on("connection", (socket) => {
 
   socket.on("clear", () => {
     emitToRoom("clear");
+  });
+
+  socket.on("disconnect", (reason) => {
+    console.log(`[${new Date().toISOString()}] Disconnected: ${reason}`);
   });
 });
 
