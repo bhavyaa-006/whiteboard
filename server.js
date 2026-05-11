@@ -15,7 +15,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: corsOriginOption },
-  transports: ["polling", "websocket"],
+  transports: ["websocket", "polling"],
   pingInterval: 10000,
   pingTimeout: 15000,
   allowEIO3: true,
@@ -82,6 +82,10 @@ io.on("connection", (socket) => {
 
   socket.on("draw", (data) => {
     emitToRoom("draw", data);
+  });
+
+  socket.on("drawBatch", (batch) => {
+    emitToRoom("drawBatch", batch);
   });
 
   socket.on("shape:add", (data) => {

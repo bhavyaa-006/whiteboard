@@ -46,7 +46,7 @@ function toAbsoluteAssetUrl(url) {
 }
 
 const socket = io(backendBaseUrl, {
-  transports: ["polling", "websocket"],
+  transports: ["websocket", "polling"],
   reconnection: true,
   reconnectionDelay: 500,
   reconnectionDelayMax: 3000,
@@ -472,8 +472,18 @@ useFillCheckbox.addEventListener("change", () => {
   fillColorPicker.disabled = !useFillCheckbox.checked;
 });
 
+let drawQueue = [];
+let drawQueueTimer = null;
+
 function sendLine(from, to, color, size, brush, shape, useFill, fillColor) {
-  socket.emit("draw", { from, to, color, size, brush, shape, useFill, fillColor });
+  drawQueue.push({ from, to, color, size, brush, shape, useFill, fillColor });
+  if (!drawQueueTimer) {
+    drawQueueTimer = setTimeout(() => {
+      socket.emit("drawBatch", drawQueue);
+      drawQueue = [];
+      drawQueueTimer = null;
+    }, 16);
+  }
 }
 
 function sendShapeEvent(eventName, element) {
@@ -1155,6 +1165,20 @@ socket.on("draw", (data) => {
   } else if (shape === "bucket") {
     bucketFill(from || to, color);
   }
+});
+
+socket.on("drawBatch", (batch) => {
+  if (!Array.isArray(batch)) return;
+  batch.forEach((data) => {
+    const { from, to, color, size, brush = "solid", shape = "pen", useFill = false, fillColor = "#FF0000" } = data;
+    if (shape === "pen") {
+      drawLine(baseCtx, from, to, color, size, brush);
+    } else if (shape === "eraser") {
+      drawEraserLine(baseCtx, from, to, size);
+    } else if (shape === "bucket") {
+      bucketFill(from || to, color);
+    }
+  });
 });
 
 socket.on("shape:add", (element) => {
