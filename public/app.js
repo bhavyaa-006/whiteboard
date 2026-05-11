@@ -654,18 +654,30 @@ function bucketFill(startPoint, fillColor) {
 
   if (x < 0 || y < 0 || x >= baseCanvas.width || y >= baseCanvas.height) return;
 
-  const imageData = baseCtx.getImageData(0, 0, baseCanvas.width, baseCanvas.height);
-  const { data, width, height } = imageData;
+  const baseImageData = baseCtx.getImageData(0, 0, baseCanvas.width, baseCanvas.height);
+  const baseData = baseImageData.data;
+  const width = baseImageData.width;
+  const height = baseImageData.height;
+
+  // Create a composite canvas to read boundaries from both layers
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = width;
+  tempCanvas.height = height;
+  const tempCtx = tempCanvas.getContext("2d", { willReadFrequently: true });
+  tempCtx.drawImage(baseCanvas, 0, 0);
+  tempCtx.drawImage(shapeCanvas, 0, 0);
+  const compositeData = tempCtx.getImageData(0, 0, width, height).data;
+
   const targetIndex = (y * width + x) * 4;
   const targetColor = [
-    data[targetIndex],
-    data[targetIndex + 1],
-    data[targetIndex + 2],
-    data[targetIndex + 3],
+    compositeData[targetIndex],
+    compositeData[targetIndex + 1],
+    compositeData[targetIndex + 2],
+    compositeData[targetIndex + 3],
   ];
   const replacementColor = hexToRgba(fillColor);
 
-  if (colorsMatch(data, targetIndex, replacementColor)) return;
+  if (colorsMatch(compositeData, targetIndex, replacementColor)) return;
 
   const stack = [[x, y]];
 
@@ -678,7 +690,7 @@ function bucketFill(startPoint, fillColor) {
     let right = startX;
     let currentIndex = (startY * width + startX) * 4;
 
-    while (left >= 0 && colorsMatch(data, currentIndex, targetColor)) {
+    while (left >= 0 && colorsMatch(compositeData, currentIndex, targetColor)) {
       left -= 1;
       currentIndex -= 4;
     }
@@ -686,7 +698,7 @@ function bucketFill(startPoint, fillColor) {
     left += 1;
     currentIndex = (startY * width + startX) * 4;
 
-    while (right < width && colorsMatch(data, currentIndex, targetColor)) {
+    while (right < width && colorsMatch(compositeData, currentIndex, targetColor)) {
       right += 1;
       currentIndex += 4;
     }
@@ -695,10 +707,15 @@ function bucketFill(startPoint, fillColor) {
 
     for (let fillX = left; fillX <= right; fillX += 1) {
       const pixelIndex = (startY * width + fillX) * 4;
-      data[pixelIndex] = replacementColor[0];
-      data[pixelIndex + 1] = replacementColor[1];
-      data[pixelIndex + 2] = replacementColor[2];
-      data[pixelIndex + 3] = replacementColor[3];
+      compositeData[pixelIndex] = replacementColor[0];
+      compositeData[pixelIndex + 1] = replacementColor[1];
+      compositeData[pixelIndex + 2] = replacementColor[2];
+      compositeData[pixelIndex + 3] = replacementColor[3];
+
+      baseData[pixelIndex] = replacementColor[0];
+      baseData[pixelIndex + 1] = replacementColor[1];
+      baseData[pixelIndex + 2] = replacementColor[2];
+      baseData[pixelIndex + 3] = replacementColor[3];
     }
 
     for (const neighborY of [startY - 1, startY + 1]) {
@@ -707,7 +724,7 @@ function bucketFill(startPoint, fillColor) {
       let fillRun = false;
       for (let fillX = left; fillX <= right; fillX += 1) {
         const neighborIndex = (neighborY * width + fillX) * 4;
-        if (colorsMatch(data, neighborIndex, targetColor)) {
+        if (colorsMatch(compositeData, neighborIndex, targetColor)) {
           if (!fillRun) {
             stack.push([fillX, neighborY]);
             fillRun = true;
@@ -719,7 +736,7 @@ function bucketFill(startPoint, fillColor) {
     }
   }
 
-  baseCtx.putImageData(imageData, 0, 0);
+  baseCtx.putImageData(baseImageData, 0, 0);
 }
 
 function createShapeElement(type, from, to, color, size, brush, useFill, fillColor, rotation = 0) {
