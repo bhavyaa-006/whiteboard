@@ -8,15 +8,27 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" },
-  transports: ["polling", "websocket"],
-  pingInterval: 25000,
-  pingTimeout: 60000,
+  transports: ["websocket", "polling"],
+  pingInterval: 5000,
+  pingTimeout: 10000,
+  upgradeTimeout: 5000,
+  allowEIO3: true,
 });
 
 app.use(express.json({ limit: "20mb" }));
 
 const publicDir = path.join(__dirname, "public");
 const imagesDir = process.env.TEMP_DIR || path.join(__dirname, "images");
+
+// Disconnect and cleanup after the join-room listener is set up
+io.on("connection", (socket) => {
+  const transport = socket.conn.transport.name;
+  console.log(`[${new Date().toISOString()}] Connected via ${transport}, rooms: ${socket.rooms.size}`);
+
+  socket.on("disconnect", (reason) => {
+    console.log(`[${new Date().toISOString()}] Disconnected: ${reason}`);
+  });
+});
 
 app.use(express.static(publicDir));
 app.use("/images", express.static(imagesDir));

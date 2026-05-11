@@ -11,6 +11,7 @@ body{margin:0;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
 #controls button:hover{background:#0056b3}
 #roomControls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 #roomControls input{width:120px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px}
+#connectionStatus{padding:0 8px;white-space:nowrap;font-weight:500;display:flex;align-items:center;gap:4px}
 #board,#elements{position:fixed;left:0;top:0;width:100%;height:100%;touch-action:none}
 #board{pointer-events:none;z-index:1}
 #elements{pointer-events:auto;z-index:2}

@@ -17,11 +17,12 @@ function getInviteLink(roomId) {
 }
 
 const socket = io({
-  transports: ["polling", "websocket"],
+  transports: ["websocket", "polling"],
   reconnection: true,
-  reconnectionDelay: 1000,
-  reconnectionDelayMax: 5000,
-  reconnectionAttempts: 5,
+  reconnectionDelay: 300,
+  reconnectionDelayMax: 2000,
+  reconnectionAttempts: 10,
+  multiplex: false,
 });
 
 const baseCanvas = document.getElementById("board");
@@ -42,8 +43,7 @@ const roomInput = document.getElementById("room");
 const newRoomBtn = document.getElementById("newRoom");
 const copyRoomBtn = document.getElementById("copyRoom");
 const imagesEl = document.getElementById("images");
-
-let drawing = false;
+const connectionStatus = document.getElementById("connectionStatus");
 let last = null;
 let shapeStart = null;
 let currentPoint = null;
@@ -71,6 +71,9 @@ function setCurrentRoom(roomId, replace = false) {
 setCurrentRoom(currentRoomId, true);
 
 socket.on("connect", () => {
+  const transport = socket.io.engine.transport.name;
+  connectionStatus.textContent = `● ${transport} connected`;
+  connectionStatus.style.color = transport === "websocket" ? "#22c55e" : "#f59e0b";
   socket.emit("join-room", currentRoomId);
 });
 
@@ -93,6 +96,17 @@ copyRoomBtn.addEventListener("click", async () => {
   } catch {
     alert(inviteLink);
   }
+});
+
+socket.on("disconnect", () => {
+  connectionStatus.textContent = "● disconnected";
+  connectionStatus.style.color = "#ef4444";
+});
+
+socket.on("connect_error", (err) => {
+  console.error("Connection error:", err);
+  connectionStatus.textContent = "● error";
+  connectionStatus.style.color = "#ef4444";
 });
 
 function createId() {
