@@ -17,12 +17,11 @@ function getInviteLink(roomId) {
 }
 
 const socket = io({
-  transports: ["websocket", "polling"],
+  transports: ["polling", "websocket"],
   reconnection: true,
-  reconnectionDelay: 300,
-  reconnectionDelayMax: 2000,
+  reconnectionDelay: 500,
+  reconnectionDelayMax: 3000,
   reconnectionAttempts: 10,
-  multiplex: false,
 });
 
 const baseCanvas = document.getElementById("board");
