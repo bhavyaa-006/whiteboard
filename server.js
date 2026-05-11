@@ -2,18 +2,26 @@
 const http = require("http");
 const path = require("path");
 const fs = require("fs");
+const cors = require("cors");
 const { Server } = require("socket.io");
+
+const corsOrigins = (process.env.CORS_ORIGIN || "*")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const corsOriginOption = corsOrigins.includes("*") ? "*" : corsOrigins;
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: "*" },
+  cors: { origin: corsOriginOption },
   transports: ["polling", "websocket"],
   pingInterval: 10000,
   pingTimeout: 15000,
   allowEIO3: true,
 });
 
+app.use(cors({ origin: corsOriginOption }));
 app.use(express.json({ limit: "20mb" }));
 
 const publicDir = path.join(__dirname, "public");

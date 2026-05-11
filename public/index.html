@@ -66,7 +66,12 @@
     <div id="images"></div>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    window.__APP_CONFIG__ = {
+      BACKEND_URL: "https://YOUR-RENDER-BACKEND.onrender.com"
+    };
+  </script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

@@ -16,7 +16,26 @@ function getInviteLink(roomId) {
   return url.toString();
 }
 
-const socket = io({
+const appConfig = window.__APP_CONFIG__ || {};
+const rawBackendUrl = appConfig.BACKEND_URL || window.location.origin;
+const backendBaseUrl = String(rawBackendUrl).replace(/\/$/, "");
+
+function buildBackendUrl(pathname) {
+  return `${backendBaseUrl}${pathname}`;
+}
+
+function toAbsoluteAssetUrl(url) {
+  if (typeof url !== "string") return url;
+  if (/^https?:\/\//i.test(url) || /^data:/i.test(url) || /^blob:/i.test(url)) {
+    return url;
+  }
+  if (url.startsWith("/")) {
+    return buildBackendUrl(url);
+  }
+  return buildBackendUrl(`/${url}`);
+}
+
+const socket = io(backendBaseUrl, {
   transports: ["polling", "websocket"],
   reconnection: true,
   reconnectionDelay: 500,
@@ -874,7 +893,7 @@ async function saveCanvas() {
   const dataUrl = exportCanvas.toDataURL("image/png");
 
   try {
-    const res = await fetch("/save-image", {
+    const res = await fetch(buildBackendUrl("/save-image"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ imageData: dataUrl }),
@@ -917,25 +936,26 @@ downloadBtn.addEventListener("click", downloadCanvas);
 
 async function refreshGallery() {
   try {
-    const res = await fetch("/list-images");
+    const res = await fetch(buildBackendUrl("/list-images"));
     const list = await res.json();
     imagesEl.innerHTML = "";
     list.reverse().forEach((url) => {
+      const absoluteUrl = toAbsoluteAssetUrl(url);
       const item = document.createElement("div");
       item.className = "gallery-item";
 
       const img = document.createElement("img");
-      img.src = url;
+      img.src = absoluteUrl;
 
       const download = document.createElement("button");
       download.type = "button";
       download.textContent = "Download";
       download.addEventListener("click", async () => {
         try {
-          const response = await fetch(url);
+          const response = await fetch(absoluteUrl);
           const blob = await response.blob();
           const blobUrl = URL.createObjectURL(blob);
-          triggerDownload(blobUrl, getFilenameFromUrl(url));
+          triggerDownload(blobUrl, getFilenameFromUrl(absoluteUrl));
           setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
         } catch (err) {
           console.error(err);
