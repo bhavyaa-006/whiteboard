@@ -147,54 +147,60 @@ input[type="checkbox"] { width: 16px; height: 16px; border-radius: 4px; cursor: 
 
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
-  /* Hide gallery on mobile to save screen space */
-  .bottom-right { display: none !important; }
+  /* Hide gallery & connection status to save space */
+  .bottom-right, #connectionStatus { display: none !important; }
 
   /* Room Controls - Top Left */
-  .top-left { top: 10px; left: 10px; padding: 4px 8px; gap: 4px; }
-  .top-left .input-with-icon input { width: 80px; font-size: 11px; }
-  .top-left .input-with-icon { padding: 4px 6px; gap: 4px; }
+  .top-left { top: 8px; left: 8px; padding: 4px; gap: 4px; }
+  .top-left .input-with-icon input { width: 60px; font-size: 11px; }
+  .top-left .input-with-icon { padding: 4px; gap: 4px; }
   .top-left .icon-btn { width: 28px; height: 28px; }
-  .status-indicator { font-size: 10px; padding: 2px 4px; }
   
   /* Actions - Top Right */
-  .top-right { top: 10px; right: 10px; padding: 4px; gap: 2px; }
-  .top-right .icon-btn { width: 32px; height: 32px; }
+  .top-right { top: 8px; right: 8px; padding: 4px; gap: 2px; }
+  .top-right .icon-btn { width: 28px; height: 28px; }
+  .top-right .icon-btn i { width: 16px; height: 16px; }
 
   /* Toolbar - Move to Bottom Dock */
   .top-center { 
     top: auto; 
-    bottom: 10px; 
+    bottom: 8px; 
     left: 50%; 
     transform: translateX(-50%); 
-    width: calc(100% - 20px); 
-    justify-content: space-around;
-    padding: 8px;
+    width: calc(100% - 16px); 
+    justify-content: space-between;
+    padding: 6px;
+    gap: 2px;
   }
-  .tool-group { gap: 2px; }
-  .tool-btn { width: 36px; height: 36px; }
+  .tool-btn { width: 34px; height: 34px; }
+  .tool-btn i { width: 18px; height: 18px; }
 
-  /* Properties - Move Above Bottom Dock horizontally */
+  /* Properties - Scrollable Horizontal Bar Above Dock */
   .middle-left {
     top: auto;
-    bottom: 70px;
+    bottom: 60px;
     left: 50%;
     transform: translateX(-50%);
     flex-direction: row;
-    flex-wrap: wrap;
-    width: calc(100% - 20px);
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: calc(100% - 16px);
     padding: 8px;
-    gap: 12px;
-    justify-content: center;
+    gap: 16px;
+    justify-content: flex-start;
   }
+  .middle-left::-webkit-scrollbar { display: none; }
+  
   .prop-group { 
     flex-direction: row; 
     align-items: center; 
     width: auto; 
     gap: 8px; 
+    flex-shrink: 0;
   }
-  .middle-left label { gap: 6px; font-size: 12px; }
-  input[type="range"] { width: 60px; }
-  .modern-select { padding: 4px 8px; font-size: 12px; }
-  input[type="color"] { width: 24px; height: 24px; }
+  .middle-left label { gap: 4px; font-size: 11px; white-space: nowrap; }
+  input[type="range"] { width: 50px; }
+  .modern-select { padding: 2px 4px; font-size: 11px; }
+  input[type="color"] { width: 22px; height: 22px; }
 }
