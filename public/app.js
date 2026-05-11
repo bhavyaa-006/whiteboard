@@ -47,6 +47,7 @@ const connectionStatus = document.getElementById("connectionStatus");
 let last = null;
 let shapeStart = null;
 let currentPoint = null;
+let drawing = false;
 let selectedElementId = null;
 let draggingElement = false;
 let dragStartPoint = null;
