@@ -5,9 +5,19 @@ function createRoomId() {
   return `room-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 }
 
+function normalizeRoomId(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return null;
+
+  // Keep room IDs URL-safe and bounded.
+  if (!/^room-[a-z0-9-]{4,40}$/.test(trimmed)) return null;
+  return trimmed;
+}
+
 function getRoomIdFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  return params.get("room");
+  return normalizeRoomId(params.get("room"));
 }
 
 function getInviteLink(roomId) {
@@ -82,10 +92,10 @@ function syncRoomUrl(roomId, replace = false) {
 }
 
 function setCurrentRoom(roomId, replace = false) {
-  currentRoomId = roomId;
-  roomInput.value = roomId;
-  syncRoomUrl(roomId, replace);
-  socket.emit("join-room", roomId);
+  currentRoomId = normalizeRoomId(roomId) || createRoomId();
+  roomInput.value = currentRoomId;
+  syncRoomUrl(currentRoomId, replace);
+  socket.emit("join-room", currentRoomId);
 }
 
 setCurrentRoom(currentRoomId, true);
