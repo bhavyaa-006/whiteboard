@@ -7,7 +7,25 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div id="controls">
+  <main id="launchPage">
+    <section class="launchCard">
+      <p class="launchEyebrow">Whiteboard</p>
+      <h1>Create or join a room</h1>
+      <p class="launchCopy">Start a fresh board for yourself or jump into an existing room with a room code.</p>
+
+      <div class="launchActions">
+        <button id="createRoom" type="button" class="launchPrimary">Create Room</button>
+
+        <div class="joinRow">
+          <input id="joinRoomInput" type="text" placeholder="room-1234abcd" autocomplete="off" spellcheck="false">
+          <button id="joinRoom" type="button">Join Room</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="appShell" hidden>
+    <div id="controls">
     <div id="strokeControls">
       <label>Stroke Color <input type="color" id="color" value="#000000"></label>
       <label>Size <input id="size" type="range" min="1" max="30" value="4"></label>
@@ -67,6 +85,7 @@
   <div id="gallery">
     <h3>Saved Images</h3>
     <div id="images"></div>
+  </div>
   </div>
 
   <script>

@@ -70,11 +70,16 @@ const redoBtn = document.getElementById("redo");
 const clearBtn = document.getElementById("clear");
 const saveBtn = document.getElementById("save");
 const downloadBtn = document.getElementById("download");
+const createRoomBtn = document.getElementById("createRoom");
+const joinRoomBtn = document.getElementById("joinRoom");
+const joinRoomInput = document.getElementById("joinRoomInput");
 const roomInput = document.getElementById("room");
 const newRoomBtn = document.getElementById("newRoom");
 const copyRoomBtn = document.getElementById("copyRoom");
 const imagesEl = document.getElementById("images");
 const connectionStatus = document.getElementById("connectionStatus");
+const launchPage = document.getElementById("launchPage");
+const appShell = document.getElementById("appShell");
 const ERASER_CURSOR = 'url("data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22><rect x=%229%22 y=%2212%22 width=%2222%22 height=%2214%22 rx=%222%22 fill=%22white%22 stroke=%22black%22 stroke-width=%222%22 transform=%22rotate(-25 20 20)%22/><path d=%22M11 28 L28 11%22 stroke=%22black%22 stroke-width=%223%22 stroke-linecap=%22round%22/></svg>") 4 32, auto';
 let last = null;
 let shapeStart = null;
@@ -86,7 +91,7 @@ let dragStartPoint = null;
 let dragOrigin = null;
 let draftElement = null;
 let shapeElements = [];
-let currentRoomId = getRoomIdFromUrl() || createRoomId();
+let currentRoomId = getRoomIdFromUrl();
 let historyStack = [];
 let redoStack = [];
 let isApplyingSnapshot = false;
@@ -128,7 +133,11 @@ function updateHistoryButtons() {
 
 function syncRoomUrl(roomId, replace = false) {
   const url = new URL(window.location.href);
-  url.searchParams.set("room", roomId);
+  if (roomId) {
+    url.searchParams.set("room", roomId);
+  } else {
+    url.searchParams.delete("room");
+  }
   window.history[replace ? "replaceState" : "pushState"]({}, "", url);
 }
 
@@ -137,9 +146,31 @@ function setCurrentRoom(roomId, replace = false) {
   roomInput.value = currentRoomId;
   syncRoomUrl(currentRoomId, replace);
   socket.emit("join-room", currentRoomId);
+  launchPage.hidden = true;
+  appShell.hidden = false;
+  updateCursorForTool();
 }
 
-setCurrentRoom(currentRoomId, true);
+function showLaunchPage() {
+  launchPage.hidden = false;
+  appShell.hidden = true;
+  updateCursorForTool();
+}
+
+function openRoom(roomId, replace = false) {
+  setCurrentRoom(roomId, replace);
+  historyStack = [];
+  redoStack = [];
+  initializeHistoryFromCurrentState();
+}
+
+if (currentRoomId) {
+  setCurrentRoom(currentRoomId, true);
+  initializeHistoryFromCurrentState();
+} else {
+  showLaunchPage();
+}
+
 updateCursorForTool();
 
 socket.on("connect", () => {
@@ -152,10 +183,7 @@ socket.on("connect", () => {
 newRoomBtn.addEventListener("click", async () => {
   clearAll();
   const nextRoomId = createRoomId();
-  setCurrentRoom(nextRoomId);
-  historyStack = [];
-  redoStack = [];
-  initializeHistoryFromCurrentState();
+  openRoom(nextRoomId);
   socket.emit("state:sync", captureSnapshot());
 
   try {
@@ -167,6 +195,40 @@ newRoomBtn.addEventListener("click", async () => {
 
 shapeInput.addEventListener("change", () => {
   updateCursorForTool();
+});
+
+createRoomBtn.addEventListener("click", () => {
+  clearAll();
+  openRoom(createRoomId());
+});
+
+joinRoomBtn.addEventListener("click", () => {
+  const roomId = normalizeRoomId(joinRoomInput.value);
+  if (!roomId) {
+    joinRoomInput.focus();
+    joinRoomInput.select();
+    return;
+  }
+  clearAll();
+  openRoom(roomId, true);
+});
+
+joinRoomInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    joinRoomBtn.click();
+  }
+});
+
+window.addEventListener("popstate", () => {
+  const roomId = getRoomIdFromUrl();
+  if (roomId) {
+    setCurrentRoom(roomId, true);
+    initializeHistoryFromCurrentState();
+  } else {
+    currentRoomId = null;
+    showLaunchPage();
+  }
 });
 
 copyRoomBtn.addEventListener("click", async () => {
