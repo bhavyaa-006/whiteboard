@@ -968,6 +968,7 @@ function renderShapeLayer() {
 function syncRotationControl() {
   const selectedElement = shapeElements.find((element) => element.id === selectedElementId);
   const isSelectable = Boolean(selectedElement);
+  rotationInput.disabled = !isSelectable;
   if (isSelectable) {
     rotationInput.value = String(Math.round(selectedElement.rotation || 0) % 360);
   } else {
@@ -1159,10 +1160,6 @@ shapeCanvas.addEventListener("pointerenter", () => {
 });
 
 rotationInput.addEventListener("input", () => {
-  if (!selectedElementId) {
-    rotationInput.value = "0";
-    return;
-  }
   const selectedElement = shapeElements.find((element) => element.id === selectedElementId);
   if (!selectedElement) return;
   selectedElement.rotation = Number(rotationInput.value);
@@ -1170,11 +1167,6 @@ rotationInput.addEventListener("input", () => {
 });
 
 rotationInput.addEventListener("change", () => {
-  if (!selectedElementId) {
-    rotationInput.value = "0";
-    alert("Please select a shape first to rotate it.");
-    return;
-  }
   const selectedElement = shapeElements.find((element) => element.id === selectedElementId);
   if (!selectedElement) return;
   updateShapeElement(selectedElement, true);
