@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const http = require("http");
 const path = require("path");
 const fs = require("fs");
@@ -25,13 +25,17 @@ app.use(cors({ origin: corsOriginOption }));
 app.use(express.json({ limit: "20mb" }));
 
 const publicDir = path.join(__dirname, "public");
-const imagesDir = process.env.TEMP_DIR || path.join(__dirname, "images");
+const imagesDir = process.env.TEMP_DIR || (process.env.VERCEL ? "/tmp/images" : path.join(__dirname, "images"));
 
 app.use(express.static(publicDir));
 app.use("/images", express.static(imagesDir));
 
-if (!fs.existsSync(imagesDir)) {
-  fs.mkdirSync(imagesDir, { recursive: true });
+try {
+  if (!fs.existsSync(imagesDir)) {
+    fs.mkdirSync(imagesDir, { recursive: true });
+  }
+} catch (error) {
+  console.warn("Could not create images directory (expected on serverless environments):", error.message);
 }
 
 const roomSnapshots = new Map();
