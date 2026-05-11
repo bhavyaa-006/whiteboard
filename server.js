@@ -34,6 +34,13 @@ if (!fs.existsSync(imagesDir)) {
   fs.mkdirSync(imagesDir, { recursive: true });
 }
 
+const roomSnapshots = new Map();
+
+function setRoomSnapshot(roomId, snapshot) {
+  if (!roomId || !snapshot) return;
+  roomSnapshots.set(roomId, snapshot);
+}
+
 io.on("connection", (socket) => {
   const transport = socket.conn.transport.name;
   console.log(`[${new Date().toISOString()}] Connected via ${transport}, id: ${socket.id}`);
@@ -49,12 +56,24 @@ io.on("connection", (socket) => {
 
     socket.join(roomId);
     socket.data.roomId = roomId;
+
+    const snapshot = roomSnapshots.get(roomId);
+    if (snapshot) {
+      socket.emit("state:sync", snapshot);
+    }
   });
 
   function emitToRoom(eventName, data) {
     const roomId = socket.data.roomId;
     if (!roomId) return;
     socket.to(roomId).emit(eventName, data);
+  }
+
+  function storeAndBroadcastSnapshot(snapshot) {
+    const roomId = socket.data.roomId;
+    if (!roomId || !snapshot) return;
+    setRoomSnapshot(roomId, snapshot);
+    socket.to(roomId).emit("state:sync", snapshot);
   }
 
   socket.on("draw", (data) => {
@@ -71,6 +90,10 @@ io.on("connection", (socket) => {
 
   socket.on("clear", () => {
     emitToRoom("clear");
+  });
+
+  socket.on("state:sync", (snapshot) => {
+    storeAndBroadcastSnapshot(snapshot);
   });
 
   socket.on("disconnect", (reason) => {

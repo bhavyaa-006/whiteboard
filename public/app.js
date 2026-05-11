@@ -65,6 +65,8 @@ const shapeInput = document.getElementById("shape");
 const rotationInput = document.getElementById("rotation");
 const useFillCheckbox = document.getElementById("useFill");
 const fillColorPicker = document.getElementById("fillColor");
+const undoBtn = document.getElementById("undo");
+const redoBtn = document.getElementById("redo");
 const clearBtn = document.getElementById("clear");
 const saveBtn = document.getElementById("save");
 const downloadBtn = document.getElementById("download");
@@ -84,6 +86,18 @@ let dragOrigin = null;
 let draftElement = null;
 let shapeElements = [];
 let currentRoomId = getRoomIdFromUrl() || createRoomId();
+let historyStack = [];
+let redoStack = [];
+let isApplyingSnapshot = false;
+
+function updateHistoryButtons() {
+  if (undoBtn) {
+    undoBtn.disabled = historyStack.length <= 1;
+  }
+  if (redoBtn) {
+    redoBtn.disabled = redoStack.length === 0;
+  }
+}
 
 function syncRoomUrl(roomId, replace = false) {
   const url = new URL(window.location.href);
@@ -111,6 +125,10 @@ newRoomBtn.addEventListener("click", async () => {
   clearAll();
   const nextRoomId = createRoomId();
   setCurrentRoom(nextRoomId);
+  historyStack = [];
+  redoStack = [];
+  initializeHistoryFromCurrentState();
+  socket.emit("state:sync", captureSnapshot());
 
   try {
     await navigator.clipboard.writeText(getInviteLink(nextRoomId));
@@ -125,6 +143,32 @@ copyRoomBtn.addEventListener("click", async () => {
     await navigator.clipboard.writeText(inviteLink);
   } catch {
     alert(inviteLink);
+  }
+});
+
+undoBtn.addEventListener("click", () => {
+  void undoState();
+});
+
+redoBtn.addEventListener("click", () => {
+  void redoState();
+});
+
+document.addEventListener("keydown", (event) => {
+  const isEditable = event.target instanceof HTMLInputElement
+    || event.target instanceof HTMLTextAreaElement
+    || event.target instanceof HTMLSelectElement;
+  if (isEditable) return;
+
+  const key = event.key.toLowerCase();
+  if ((event.metaKey || event.ctrlKey) && key === "z") {
+    event.preventDefault();
+    if (event.shiftKey) void redoState();
+    else void undoState();
+  }
+  if ((event.metaKey || event.ctrlKey) && key === "y") {
+    event.preventDefault();
+    void redoState();
   }
 });
 
@@ -178,6 +222,122 @@ function cloneElement(element) {
   };
 }
 
+function snapshotSignature(snapshot) {
+  return JSON.stringify({
+    baseDataUrl: snapshot.baseDataUrl,
+    shapeElements: snapshot.shapeElements,
+  });
+}
+
+function captureSnapshot() {
+  return {
+    baseDataUrl: baseCanvas.toDataURL("image/png"),
+    shapeElements: shapeElements.map(cloneElement),
+  };
+}
+
+function resetInteractionState() {
+  selectedElementId = null;
+  draggingElement = false;
+  dragStartPoint = null;
+  dragOrigin = null;
+  draftElement = null;
+  drawing = false;
+  last = null;
+  shapeStart = null;
+  currentPoint = null;
+  syncRotationControl();
+}
+
+function setHistoryState(snapshot) {
+  const signature = snapshotSignature(snapshot);
+  const lastEntry = historyStack[historyStack.length - 1];
+  if (lastEntry && lastEntry.signature === signature) return false;
+  historyStack.push({ signature, snapshot });
+  redoStack = [];
+  updateHistoryButtons();
+  return true;
+}
+
+function initializeHistoryFromCurrentState() {
+  const snapshot = captureSnapshot();
+  historyStack = [{ signature: snapshotSignature(snapshot), snapshot }];
+  redoStack = [];
+  updateHistoryButtons();
+}
+
+function commitCurrentState(broadcast = true) {
+  if (isApplyingSnapshot) return;
+  const snapshot = captureSnapshot();
+  if (!setHistoryState(snapshot)) return;
+  if (broadcast) {
+    socket.emit("state:sync", snapshot);
+  }
+}
+
+function applySnapshotToBoard(snapshot) {
+  return new Promise((resolve) => {
+    const apply = () => {
+      shapeElements = Array.isArray(snapshot.shapeElements)
+        ? snapshot.shapeElements.map(cloneElement)
+        : [];
+      resetInteractionState();
+      renderShapeLayer();
+      resolve();
+    };
+
+    if (!snapshot.baseDataUrl) {
+      baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
+      apply();
+      return;
+    }
+
+    const image = new Image();
+    image.onload = () => {
+      baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
+      baseCtx.drawImage(image, 0, 0, baseCanvas.width, baseCanvas.height);
+      apply();
+    };
+    image.onerror = () => {
+      baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
+      apply();
+    };
+    image.src = snapshot.baseDataUrl;
+  });
+}
+
+async function applySnapshot(snapshot, { pushToHistory = true } = {}) {
+  if (!snapshot) return;
+  isApplyingSnapshot = true;
+  try {
+    await applySnapshotToBoard(snapshot);
+    if (pushToHistory) {
+      setHistoryState(snapshot);
+    }
+  } finally {
+    isApplyingSnapshot = false;
+  }
+}
+
+async function undoState() {
+  if (historyStack.length <= 1) return;
+  const currentEntry = historyStack.pop();
+  redoStack.push(currentEntry);
+  const previousEntry = historyStack[historyStack.length - 1];
+  updateHistoryButtons();
+  await applySnapshot(previousEntry.snapshot, { pushToHistory: false });
+  socket.emit("state:sync", previousEntry.snapshot);
+}
+
+async function redoState() {
+  if (!redoStack.length) return;
+  const nextEntry = redoStack.pop();
+  historyStack.push(nextEntry);
+  updateHistoryButtons();
+  await applySnapshot(nextEntry.snapshot, { pushToHistory: false });
+  socket.emit("state:sync", nextEntry.snapshot);
+}
+
 function getCanvasPoint(event) {
   const rect = shapeCanvas.getBoundingClientRect();
   return {
@@ -212,6 +372,7 @@ function resizeAll() {
 
 window.addEventListener("resize", resizeAll);
 resizeAll();
+initializeHistoryFromCurrentState();
 
 useFillCheckbox.addEventListener("change", () => {
   fillColorPicker.disabled = !useFillCheckbox.checked;
@@ -286,6 +447,20 @@ function drawLine(context, from, to, color, size, brush = "solid") {
   else if (brush === "dashed") drawDashedLine(context, from, to, color, size);
   else if (brush === "spray") drawSprayLine(context, from, to, color, size);
   else drawSolidLine(context, from, to, color, size);
+}
+
+function drawEraserLine(context, from, to, size) {
+  context.save();
+  context.globalCompositeOperation = "destination-out";
+  context.strokeStyle = "rgba(0,0,0,1)";
+  context.lineWidth = Math.max(6, size * 2);
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.beginPath();
+  context.moveTo(from.x * context.canvas.width, from.y * context.canvas.height);
+  context.lineTo(to.x * context.canvas.width, to.y * context.canvas.height);
+  context.stroke();
+  context.restore();
 }
 
 function drawRectangle(context, start, end, color, size, useFill, fillColor) {
@@ -698,16 +873,7 @@ function updateShapeElement(updatedElement, broadcast = true) {
 function clearAll() {
   baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
   shapeElements = [];
-  selectedElementId = null;
-  draftElement = null;
-  drawing = false;
-  last = null;
-  shapeStart = null;
-  currentPoint = null;
-  draggingElement = false;
-  dragStartPoint = null;
-  dragOrigin = null;
-  syncRotationControl();
+  resetInteractionState();
   renderShapeLayer();
 }
 
@@ -726,11 +892,12 @@ shapeCanvas.addEventListener("pointerdown", (event) => {
   const tool = shapeInput.value;
   const point = getCanvasPoint(event);
 
-  if (tool === "pen") {
+  if (tool === "pen" || tool === "eraser") {
     drawing = true;
     last = point;
     shapeStart = point;
     currentPoint = point;
+    shapeCanvas.setPointerCapture(event.pointerId);
     return;
   }
 
@@ -738,6 +905,7 @@ shapeCanvas.addEventListener("pointerdown", (event) => {
     const bucketColor = useFillCheckbox.checked ? fillColorPicker.value : colorPicker.value;
     bucketFill(point, bucketColor);
     sendLine(point, point, bucketColor, 0, "solid", "bucket", false, bucketColor);
+    commitCurrentState(true);
     return;
   }
 
@@ -775,11 +943,15 @@ shapeCanvas.addEventListener("pointermove", (event) => {
   const point = getCanvasPoint(event);
   const tool = shapeInput.value;
 
-  if (tool === "pen" && drawing) {
+  if ((tool === "pen" || tool === "eraser") && drawing) {
     const color = colorPicker.value;
     const size = parseInt(sizeInput.value, 10);
     const brush = brushInput.value;
-    drawLine(baseCtx, last, point, color, size, brush);
+    if (tool === "eraser") {
+      drawEraserLine(baseCtx, last, point, size);
+    } else {
+      drawLine(baseCtx, last, point, color, size, brush);
+    }
     sendLine(last, point, color, size, brush, tool, false, fillColorPicker.value);
     last = point;
     currentPoint = point;
@@ -809,6 +981,7 @@ shapeCanvas.addEventListener("pointerup", (event) => {
     const activeElement = shapeElements.find((element) => element.id === selectedElementId);
     if (activeElement) {
       updateShapeElement(activeElement, true);
+      commitCurrentState(true);
     }
     draggingElement = false;
     dragOrigin = null;
@@ -816,11 +989,12 @@ shapeCanvas.addEventListener("pointerup", (event) => {
     return;
   }
 
-  if (tool === "pen") {
+  if (tool === "pen" || tool === "eraser") {
     drawing = false;
     last = null;
     shapeStart = null;
     currentPoint = null;
+    commitCurrentState(true);
     return;
   }
 
@@ -828,6 +1002,7 @@ shapeCanvas.addEventListener("pointerup", (event) => {
     draftElement.to = getCanvasPoint(event);
     addShapeElement(cloneElement(draftElement), true);
     draftElement = null;
+    commitCurrentState(true);
   }
 
   drawing = false;
@@ -866,6 +1041,8 @@ socket.on("draw", (data) => {
 
   if (shape === "pen") {
     drawLine(baseCtx, from, to, color, size, brush);
+  } else if (shape === "eraser") {
+    drawEraserLine(baseCtx, from, to, size);
   } else if (shape === "bucket") {
     bucketFill(from || to, color);
   }
@@ -885,13 +1062,19 @@ socket.on("shape:update", (element) => {
   syncRotationControl();
 });
 
+socket.on("state:sync", async (snapshot) => {
+  await applySnapshot(snapshot, { pushToHistory: true });
+});
+
 clearBtn.addEventListener("click", () => {
   clearAll();
+  commitCurrentState(true);
   socket.emit("clear");
 });
 
 socket.on("clear", () => {
   clearAll();
+  commitCurrentState(false);
 });
 
 async function saveCanvas() {
