@@ -1,10 +1,14 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Whiteboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
   <main id="launchPage">
@@ -25,73 +29,134 @@
   </main>
 
   <div id="appShell" hidden>
-    <div id="controls">
-    <div id="strokeControls">
-      <label>Stroke Color <input type="color" id="color" value="#000000"></label>
-      <label>Size <input id="size" type="range" min="1" max="30" value="4"></label>
-      <label>Brush:
-        <select id="brush">
-          <option value="solid">Solid</option>
-          <option value="dotted">Dotted</option>
-          <option value="dashed">Dashed</option>
-          <option value="spray">Spray</option>
-        </select>
-      </label>
+    
+    <!-- Top Left: Room Controls -->
+    <div id="roomIsland" class="floating-island top-left">
+      <div class="island-row" id="roomControls">
+        <div class="input-with-icon">
+          <i data-lucide="users"></i>
+          <input id="room" type="text" readonly>
+        </div>
+        <button id="newRoom" class="icon-btn" type="button" title="New Room"><i data-lucide="plus"></i></button>
+        <button id="copyRoom" class="icon-btn" type="button" title="Copy Link"><i data-lucide="link"></i></button>
+      </div>
+      <div id="connectionStatus" class="status-indicator">●</div>
     </div>
 
-    <div id="fillControls">
-      <label><input type="checkbox" id="useFill"> Fill</label>
-      <label>Fill Color <input type="color" id="fillColor" value="#FF0000" disabled></label>
-    </div>
-
-    <div id="shapeControls">
-      <label>Shape:
-        <select id="shape">
-          <option value="pen">Pen</option>
+    <!-- Top Center: Toolbar -->
+    <div id="toolBar" class="floating-island top-center">
+      <div class="tool-group">
+        <select id="shape" style="display:none;">
+          <option value="select">Select</option>
+          <option value="pen" selected>Pen</option>
           <option value="eraser">Eraser</option>
           <option value="line">Line</option>
           <option value="rectangle">Rectangle</option>
           <option value="circle">Circle</option>
           <option value="triangle">Triangle</option>
           <option value="bucket">Bucket</option>
-          <option value="select">Select</option>
         </select>
-      </label>
+        
+        <button type="button" class="tool-btn" data-tool="select" title="Select"><i data-lucide="mouse-pointer-2"></i></button>
+        <button type="button" class="tool-btn active" data-tool="pen" title="Pen"><i data-lucide="pen"></i></button>
+        <button type="button" class="tool-btn" data-tool="eraser" title="Eraser"><i data-lucide="eraser"></i></button>
+        <div class="divider"></div>
+        <button type="button" class="tool-btn" data-tool="line" title="Line"><i data-lucide="minus"></i></button>
+        <button type="button" class="tool-btn" data-tool="rectangle" title="Rectangle"><i data-lucide="square"></i></button>
+        <button type="button" class="tool-btn" data-tool="circle" title="Circle"><i data-lucide="circle"></i></button>
+        <button type="button" class="tool-btn" data-tool="triangle" title="Triangle"><i data-lucide="triangle"></i></button>
+        <div class="divider"></div>
+        <button type="button" class="tool-btn" data-tool="bucket" title="Fill Bucket"><i data-lucide="paint-bucket"></i></button>
+      </div>
     </div>
 
-    <div id="transformControls">
-      <label>Orientation <input id="rotation" type="range" min="0" max="359" value="0" disabled></label>
+    <!-- Left Floating: Properties -->
+    <div id="propertiesPanel" class="floating-island middle-left">
+      <div id="strokeControls" class="prop-group">
+        <label>Stroke <input type="color" id="color" value="#000000"></label>
+        <label>Size <input id="size" type="range" min="1" max="30" value="4"></label>
+        <label>Brush
+          <select id="brush" class="modern-select">
+            <option value="solid">Solid</option>
+            <option value="dotted">Dotted</option>
+            <option value="dashed">Dashed</option>
+            <option value="spray">Spray</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="divider-horizontal"></div>
+
+      <div id="fillControls" class="prop-group">
+        <label class="checkbox-label"><input type="checkbox" id="useFill"> Fill Shape</label>
+        <label>Fill <input type="color" id="fillColor" value="#FF0000" disabled></label>
+      </div>
+      
+      <div class="divider-horizontal"></div>
+
+      <div id="transformControls" class="prop-group">
+        <label>Rotation <input id="rotation" type="range" min="0" max="359" value="0" disabled></label>
+      </div>
     </div>
 
-    <div>
-      <button id="undo" type="button">Undo</button>
-      <button id="redo" type="button">Redo</button>
-      <button id="clear">Clear</button>
-      <button id="save">Save</button>
-      <button id="download">Download</button>
+    <!-- Top Right: Actions -->
+    <div id="actionIsland" class="floating-island top-right">
+      <button id="undo" class="icon-btn" type="button" title="Undo"><i data-lucide="undo"></i></button>
+      <button id="redo" class="icon-btn" type="button" title="Redo"><i data-lucide="redo"></i></button>
+      <div class="divider"></div>
+      <button id="clear" class="icon-btn danger" type="button" title="Clear Board"><i data-lucide="trash-2"></i></button>
+      <div class="divider"></div>
+      <button id="save" class="icon-btn" type="button" title="Save to Gallery"><i data-lucide="save"></i></button>
+      <button id="download" class="icon-btn" type="button" title="Download Image"><i data-lucide="download"></i></button>
     </div>
 
-    <div id="roomControls">
-      <label>Room <input id="room" type="text" readonly></label>
-      <button id="newRoom" type="button">New Room</button>
-      <button id="copyRoom" type="button">Copy Link</button>
-      <div id="connectionStatus" style="font-size:12px;color:#666">●</div>
+    <canvas id="board"></canvas>
+    <canvas id="elements"></canvas>
+
+    <div id="gallery" class="floating-island bottom-right">
+      <div class="gallery-header">
+        <h3>Saved Images</h3>
+      </div>
+      <div id="images"></div>
     </div>
-  </div>
-
-  <canvas id="board"></canvas>
-  <canvas id="elements"></canvas>
-
-  <div id="gallery">
-    <h3>Saved Images</h3>
-    <div id="images"></div>
-  </div>
   </div>
 
   <script>
     window.__APP_CONFIG__ = {
       BACKEND_URL: "https://whiteboard-0vey.onrender.com"
     };
+
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Sync UI tool buttons with hidden #shape select
+    const shapeSelect = document.getElementById('shape');
+    const toolBtns = document.querySelectorAll('.tool-btn');
+    
+    toolBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tool = btn.getAttribute('data-tool');
+        shapeSelect.value = tool;
+        // Dispatch change event so app.js picks it up
+        shapeSelect.dispatchEvent(new Event('change'));
+        
+        // Update active class
+        toolBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    // Listen to changes from app.js if it modifies shapeSelect programmatically
+    shapeSelect.addEventListener('change', () => {
+      const tool = shapeSelect.value;
+      toolBtns.forEach(b => {
+        if (b.getAttribute('data-tool') === tool) {
+          b.classList.add('active');
+        } else {
+          b.classList.remove('active');
+        }
+      });
+    });
   </script>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="/app.js"></script>
