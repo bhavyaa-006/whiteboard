@@ -75,6 +75,7 @@ const newRoomBtn = document.getElementById("newRoom");
 const copyRoomBtn = document.getElementById("copyRoom");
 const imagesEl = document.getElementById("images");
 const connectionStatus = document.getElementById("connectionStatus");
+const ERASER_CURSOR = 'url("data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22><rect x=%229%22 y=%2212%22 width=%2222%22 height=%2214%22 rx=%222%22 fill=%22white%22 stroke=%22black%22 stroke-width=%222%22 transform=%22rotate(-25 20 20)%22/><path d=%22M11 28 L28 11%22 stroke=%22black%22 stroke-width=%223%22 stroke-linecap=%22round%22/></svg>") 4 32, auto';
 let last = null;
 let shapeStart = null;
 let currentPoint = null;
@@ -89,6 +90,32 @@ let currentRoomId = getRoomIdFromUrl() || createRoomId();
 let historyStack = [];
 let redoStack = [];
 let isApplyingSnapshot = false;
+
+function setCanvasCursor(cursor) {
+  shapeCanvas.style.cursor = cursor;
+  baseCanvas.style.cursor = cursor;
+}
+
+function updateCursorForTool() {
+  const tool = shapeInput.value;
+
+  if (tool === "select") {
+    setCanvasCursor(draggingElement ? "grabbing" : "grab");
+    return;
+  }
+
+  if (tool === "eraser") {
+    setCanvasCursor(ERASER_CURSOR);
+    return;
+  }
+
+  if (tool === "bucket") {
+    setCanvasCursor("cell");
+    return;
+  }
+
+  setCanvasCursor("crosshair");
+}
 
 function updateHistoryButtons() {
   if (undoBtn) {
@@ -113,6 +140,7 @@ function setCurrentRoom(roomId, replace = false) {
 }
 
 setCurrentRoom(currentRoomId, true);
+updateCursorForTool();
 
 socket.on("connect", () => {
   const transport = socket.io.engine.transport.name;
@@ -135,6 +163,10 @@ newRoomBtn.addEventListener("click", async () => {
   } catch {
     // Clipboard can fail on some browsers; the invite link is still in the URL.
   }
+});
+
+shapeInput.addEventListener("change", () => {
+  updateCursorForTool();
 });
 
 copyRoomBtn.addEventListener("click", async () => {
@@ -898,6 +930,7 @@ shapeCanvas.addEventListener("pointerdown", (event) => {
     shapeStart = point;
     currentPoint = point;
     shapeCanvas.setPointerCapture(event.pointerId);
+    updateCursorForTool();
     return;
   }
 
@@ -928,6 +961,7 @@ shapeCanvas.addEventListener("pointerdown", (event) => {
     syncRotationControl();
     renderShapeLayer();
     shapeCanvas.setPointerCapture(event.pointerId);
+    updateCursorForTool();
     return;
   }
 
@@ -986,6 +1020,7 @@ shapeCanvas.addEventListener("pointerup", (event) => {
     draggingElement = false;
     dragOrigin = null;
     dragStartPoint = null;
+    updateCursorForTool();
     return;
   }
 
@@ -1009,6 +1044,7 @@ shapeCanvas.addEventListener("pointerup", (event) => {
   last = null;
   shapeStart = null;
   currentPoint = null;
+  updateCursorForTool();
 });
 
 shapeCanvas.addEventListener("pointercancel", () => {
@@ -1021,6 +1057,17 @@ shapeCanvas.addEventListener("pointercancel", () => {
   dragStartPoint = null;
   draftElement = null;
   renderShapeLayer();
+  updateCursorForTool();
+});
+
+shapeCanvas.addEventListener("pointerleave", () => {
+  if (shapeInput.value === "select" && !draggingElement) {
+    setCanvasCursor("grab");
+  }
+});
+
+shapeCanvas.addEventListener("pointerenter", () => {
+  updateCursorForTool();
 });
 
 rotationInput.addEventListener("input", () => {
