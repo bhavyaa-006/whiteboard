@@ -58,17 +58,37 @@ const baseCanvas = document.getElementById("board");
 const baseCtx = baseCanvas.getContext("2d");
 const shapeCanvas = document.getElementById("elements");
 const shapeCtx = shapeCanvas.getContext("2d");
-const colorPicker = document.getElementById("color");
-const sizeInput = document.getElementById("size");
-const brushInput = document.getElementById("brush");
+const penColor = document.getElementById("penColor");
+const penSize = document.getElementById("penSize");
+const penBrush = document.getElementById("penBrush");
+const eraserSize = document.getElementById("eraserSize");
+const shapeColor = document.getElementById("shapeColor");
+const shapeSize = document.getElementById("shapeSize");
+const bucketColor = document.getElementById("bucketColor");
 const shapeInput = document.getElementById("shape");
 const rotationInput = document.getElementById("rotation");
 const useFillCheckbox = document.getElementById("useFill");
 const fillColorPicker = document.getElementById("fillColor");
+
+function getCurrentColor(tool) {
+  if (tool === 'pen') return penColor.value;
+  if (tool === 'bucket') return bucketColor.value;
+  return shapeColor.value;
+}
+
+function getCurrentSize(tool) {
+  if (tool === 'eraser') return parseInt(eraserSize.value, 10);
+  if (tool === 'pen') return parseInt(penSize.value, 10);
+  return parseInt(shapeSize.value, 10);
+}
+
+function getCurrentBrush(tool) {
+  if (tool === 'pen') return penBrush.value;
+  return 'solid';
+}
 const undoBtn = document.getElementById("undo");
 const redoBtn = document.getElementById("redo");
 const clearBtn = document.getElementById("clear");
-const saveBtn = document.getElementById("save");
 const downloadBtn = document.getElementById("download");
 const createRoomBtn = document.getElementById("createRoom");
 const joinRoomBtn = document.getElementById("joinRoom");
@@ -76,7 +96,6 @@ const joinRoomInput = document.getElementById("joinRoomInput");
 const roomInput = document.getElementById("room");
 const newRoomBtn = document.getElementById("newRoom");
 const copyRoomBtn = document.getElementById("copyRoom");
-const imagesEl = document.getElementById("images");
 const connectionStatus = document.getElementById("connectionStatus");
 const launchPage = document.getElementById("launchPage");
 const appShell = document.getElementById("appShell");
@@ -282,16 +301,6 @@ function createId() {
     return window.crypto.randomUUID();
   }
   return `shape-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function getFilenameFromUrl(url, fallbackPrefix = "image") {
-  try {
-    const parsedUrl = new URL(url, window.location.href);
-    const pathname = parsedUrl.pathname.split("/").filter(Boolean);
-    return pathname.length ? pathname[pathname.length - 1] : `${fallbackPrefix}.png`;
-  } catch {
-    return `${fallbackPrefix}.png`;
-  }
 }
 
 function triggerDownload(blobUrl, filename) {
@@ -999,9 +1008,9 @@ function clearAll() {
 }
 
 function createShapeFromTool(tool, from, to) {
-  const color = colorPicker.value;
-  const size = parseInt(sizeInput.value, 10);
-  const brush = brushInput.value;
+  const color = getCurrentColor(tool);
+  const size = getCurrentSize(tool);
+  const brush = getCurrentBrush(tool);
   const useFill = useFillCheckbox.checked;
   const fillColor = fillColorPicker.value;
   return createShapeElement(tool, from, to, color, size, brush, useFill, fillColor, 0);
@@ -1024,9 +1033,9 @@ shapeCanvas.addEventListener("pointerdown", (event) => {
   }
 
   if (tool === "bucket") {
-    const bucketColor = useFillCheckbox.checked ? fillColorPicker.value : colorPicker.value;
-    bucketFill(point, bucketColor);
-    sendLine(point, point, bucketColor, 0, "solid", "bucket", false, bucketColor);
+    const bucketCol = bucketColor.value;
+    bucketFill(point, bucketCol);
+    sendLine(point, point, bucketCol, 0, "solid", "bucket", false, bucketCol);
     commitCurrentState(true);
     return;
   }
@@ -1067,9 +1076,9 @@ shapeCanvas.addEventListener("pointermove", (event) => {
   const tool = shapeInput.value;
 
   if ((tool === "pen" || tool === "eraser") && drawing) {
-    const color = colorPicker.value;
-    const size = parseInt(sizeInput.value, 10);
-    const brush = brushInput.value;
+    const color = getCurrentColor(tool);
+    const size = getCurrentSize(tool);
+    const brush = getCurrentBrush(tool);
     if (tool === "eraser") {
       drawEraserLine(baseCtx, last, point, size);
     } else {
@@ -1227,36 +1236,6 @@ socket.on("clear", () => {
   commitCurrentState(false);
 });
 
-async function saveCanvas() {
-  const exportCanvas = document.createElement("canvas");
-  exportCanvas.width = baseCanvas.width;
-  exportCanvas.height = baseCanvas.height;
-  const exportCtx = exportCanvas.getContext("2d");
-  exportCtx.drawImage(baseCanvas, 0, 0);
-  exportCtx.drawImage(shapeCanvas, 0, 0);
-  const dataUrl = exportCanvas.toDataURL("image/png");
-
-  try {
-    const res = await fetch(buildBackendUrl("/save-image"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageData: dataUrl }),
-    });
-    const result = await res.json();
-    if (result.url) {
-      await refreshGallery();
-      alert("Saved to server");
-    } else {
-      alert("Save failed");
-    }
-  } catch (err) {
-    console.error(err);
-    alert("Save error");
-  }
-}
-
-saveBtn.addEventListener("click", saveCanvas);
-
 async function downloadCanvas() {
   const exportCanvas = document.createElement("canvas");
   exportCanvas.width = baseCanvas.width;
@@ -1277,43 +1256,3 @@ async function downloadCanvas() {
 }
 
 downloadBtn.addEventListener("click", downloadCanvas);
-
-async function refreshGallery() {
-  try {
-    const res = await fetch(buildBackendUrl("/list-images"));
-    const list = await res.json();
-    imagesEl.innerHTML = "";
-    list.reverse().forEach((url) => {
-      const absoluteUrl = toAbsoluteAssetUrl(url);
-      const item = document.createElement("div");
-      item.className = "gallery-item";
-
-      const img = document.createElement("img");
-      img.src = absoluteUrl;
-
-      const download = document.createElement("button");
-      download.type = "button";
-      download.textContent = "Download";
-      download.addEventListener("click", async () => {
-        try {
-          const response = await fetch(absoluteUrl);
-          const blob = await response.blob();
-          const blobUrl = URL.createObjectURL(blob);
-          triggerDownload(blobUrl, getFilenameFromUrl(absoluteUrl));
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-        } catch (err) {
-          console.error(err);
-          alert("Download failed");
-        }
-      });
-
-      item.appendChild(img);
-      item.appendChild(download);
-      imagesEl.appendChild(item);
-    });
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-refreshGallery();

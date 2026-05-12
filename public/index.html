@@ -59,34 +59,16 @@
         </select>
         
         <button type="button" class="tool-btn" data-tool="select" title="Select"><i data-lucide="mouse-pointer-2"></i></button>
-        <button type="button" class="tool-btn active" data-tool="pen" title="Pen"><i data-lucide="pen"></i></button>
-        <button type="button" class="tool-btn" data-tool="eraser" title="Eraser"><i data-lucide="eraser"></i></button>
-        <div class="divider"></div>
         
-        <!-- Shapes Popout -->
-        <div class="popout-container" id="shapePopoutContainer">
-          <button type="button" class="tool-btn" id="shapeMenuBtn" title="Shapes"><i data-lucide="square"></i></button>
-          <div class="popout-menu" id="shapePopout" hidden>
-            <button type="button" class="tool-btn" data-tool="line" title="Line"><i data-lucide="minus"></i></button>
-            <button type="button" class="tool-btn" data-tool="rectangle" title="Rectangle"><i data-lucide="square"></i></button>
-            <button type="button" class="tool-btn" data-tool="circle" title="Circle"><i data-lucide="circle"></i></button>
-            <button type="button" class="tool-btn" data-tool="triangle" title="Triangle"><i data-lucide="triangle"></i></button>
-          </div>
-        </div>
-
-        <div class="divider"></div>
-        <button type="button" class="tool-btn" data-tool="bucket" title="Fill Bucket"><i data-lucide="paint-bucket"></i></button>
-        <div class="divider"></div>
-        
-        <!-- Options Popout -->
-        <div class="popout-container" id="optionsPopoutContainer">
-          <button type="button" class="tool-btn" id="optionsMenuBtn" title="Tool Options"><i data-lucide="sliders-horizontal"></i></button>
-          <div class="popout-menu options-menu" id="optionsPopout" hidden>
-            <div id="strokeControls" class="prop-group">
-              <label>Stroke <input type="color" id="color" value="#000000"></label>
-              <label>Size <input id="size" type="range" min="1" max="30" value="4"></label>
+        <!-- Pen Popout -->
+        <div class="popout-container">
+          <button type="button" class="tool-btn active" data-tool="pen" title="Pen"><i data-lucide="pen"></i></button>
+          <div class="popout-menu options-menu" hidden>
+            <div class="prop-group">
+              <label>Stroke <input type="color" id="penColor" value="#000000"></label>
+              <label>Size <input id="penSize" type="range" min="1" max="30" value="4"></label>
               <label>Brush
-                <select id="brush" class="modern-select">
+                <select id="penBrush" class="modern-select">
                   <option value="solid">Solid</option>
                   <option value="dotted">Dotted</option>
                   <option value="dashed">Dashed</option>
@@ -94,18 +76,56 @@
                 </select>
               </label>
             </div>
+          </div>
+        </div>
 
+        <!-- Eraser Popout -->
+        <div class="popout-container">
+          <button type="button" class="tool-btn" data-tool="eraser" title="Eraser"><i data-lucide="eraser"></i></button>
+          <div class="popout-menu options-menu" hidden>
+            <div class="prop-group">
+              <label>Size <input id="eraserSize" type="range" min="1" max="60" value="30"></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        
+        <!-- Shapes Popout -->
+        <div class="popout-container">
+          <button type="button" class="tool-btn" id="shapeMenuBtn" title="Shapes"><i data-lucide="square"></i></button>
+          <div class="popout-menu options-menu" hidden>
+            <div class="shape-buttons-row" style="display: flex; gap: 8px;">
+              <button type="button" class="tool-btn" data-tool="line" title="Line"><i data-lucide="minus"></i></button>
+              <button type="button" class="tool-btn" data-tool="rectangle" title="Rectangle"><i data-lucide="square"></i></button>
+              <button type="button" class="tool-btn" data-tool="circle" title="Circle"><i data-lucide="circle"></i></button>
+              <button type="button" class="tool-btn" data-tool="triangle" title="Triangle"><i data-lucide="triangle"></i></button>
+            </div>
             <div class="divider-horizontal"></div>
-
-            <div id="fillControls" class="prop-group">
+            <div class="prop-group">
+              <label>Stroke <input type="color" id="shapeColor" value="#000000"></label>
+              <label>Size <input id="shapeSize" type="range" min="1" max="30" value="4"></label>
+            </div>
+            <div class="divider-horizontal"></div>
+            <div class="prop-group">
               <label class="checkbox-label"><input type="checkbox" id="useFill"> Fill Shape</label>
               <label>Fill <input type="color" id="fillColor" value="#FF0000" disabled></label>
             </div>
-            
             <div class="divider-horizontal"></div>
-
-            <div id="transformControls" class="prop-group">
+            <div class="prop-group">
               <label>Rotation <input id="rotation" type="range" min="0" max="359" value="0" disabled></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        
+        <!-- Bucket Popout -->
+        <div class="popout-container">
+          <button type="button" class="tool-btn" data-tool="bucket" title="Fill Bucket"><i data-lucide="paint-bucket"></i></button>
+          <div class="popout-menu options-menu" hidden>
+            <div class="prop-group">
+              <label>Fill <input type="color" id="bucketColor" value="#FF0000"></label>
             </div>
           </div>
         </div>
@@ -138,40 +158,37 @@
     const shapeSelect = document.getElementById('shape');
     const toolBtns = document.querySelectorAll('.tool-btn[data-tool]');
     const shapeMenuBtn = document.getElementById('shapeMenuBtn');
-    const shapePopout = document.getElementById('shapePopout');
-    const shapePopoutContainer = document.getElementById('shapePopoutContainer');
-    
-    const optionsMenuBtn = document.getElementById('optionsMenuBtn');
-    const optionsPopout = document.getElementById('optionsPopout');
-    const optionsPopoutContainer = document.getElementById('optionsPopoutContainer');
+    const popouts = document.querySelectorAll('.popout-menu');
+    const popoutContainers = document.querySelectorAll('.popout-container');
 
-    // Toggle popouts
-    shapeMenuBtn.addEventListener('click', (e) => {
-      shapePopout.hidden = !shapePopout.hidden;
-      optionsPopout.hidden = true;
-      e.stopPropagation();
-    });
+    function closeAllPopouts() {
+      popouts.forEach(p => p.hidden = true);
+    }
 
-    optionsMenuBtn.addEventListener('click', (e) => {
-      optionsPopout.hidden = !optionsPopout.hidden;
-      shapePopout.hidden = true;
-      e.stopPropagation();
-    });
-
-    // Close popouts when clicking outside
     document.addEventListener('click', (e) => {
-      if (!shapePopoutContainer.contains(e.target)) {
-        shapePopout.hidden = true;
+      let clickedInside = false;
+      popoutContainers.forEach(c => {
+        if (c.contains(e.target)) clickedInside = true;
+      });
+      if (!clickedInside) {
+        closeAllPopouts();
       }
-      if (!optionsPopoutContainer.contains(e.target)) {
-        optionsPopout.hidden = true;
-      }
+    });
+
+    shapeMenuBtn.addEventListener('click', (e) => {
+      const popout = shapeMenuBtn.nextElementSibling;
+      const isHidden = popout.hidden;
+      closeAllPopouts();
+      popout.hidden = !isHidden;
+      e.stopPropagation();
     });
 
     // Handle tool selection
     toolBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
         const tool = btn.getAttribute('data-tool');
+        const wasActive = btn.classList.contains('active');
+        
         shapeSelect.value = tool;
         shapeSelect.dispatchEvent(new Event('change'));
         
@@ -193,10 +210,15 @@
         } else {
           shapeMenuBtn.classList.remove('active');
         }
-        
-        // Hide popout after selecting a shape
-        if (btn.closest('#shapePopout')) {
-          shapePopout.hidden = true;
+
+        const popout = btn.nextElementSibling;
+        if (popout && popout.classList.contains('popout-menu')) {
+           const isHidden = popout.hidden;
+           closeAllPopouts();
+           popout.hidden = wasActive ? !isHidden : false;
+           e.stopPropagation();
+        } else if (!btn.closest('.popout-menu')) {
+           closeAllPopouts();
         }
       });
     });
