@@ -360,12 +360,12 @@ function initializeHistoryFromCurrentState() {
   updateHistoryButtons();
 }
 
-function commitCurrentState(broadcast = true) {
+function commitCurrentState(saveToServer = true) {
   if (isApplyingSnapshot) return;
   const snapshot = captureSnapshot();
   if (!setHistoryState(snapshot)) return;
-  if (broadcast) {
-    socket.emit("state:sync", snapshot);
+  if (saveToServer) {
+    socket.emit("state:save", snapshot);
   }
 }
 

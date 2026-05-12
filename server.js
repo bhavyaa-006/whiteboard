@@ -104,6 +104,12 @@ io.on("connection", (socket) => {
     storeAndBroadcastSnapshot(snapshot);
   });
 
+  socket.on("state:save", (snapshot) => {
+    const roomId = socket.data.roomId;
+    if (!roomId || !snapshot) return;
+    setRoomSnapshot(roomId, snapshot);
+  });
+
   socket.on("disconnect", (reason) => {
     console.log(`[${new Date().toISOString()}] Disconnected: ${reason}`);
   });
