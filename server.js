@@ -25,18 +25,8 @@ app.use(cors({ origin: corsOriginOption }));
 app.use(express.json({ limit: "20mb" }));
 
 const publicDir = path.join(__dirname, "public");
-const imagesDir = process.env.TEMP_DIR || (process.env.VERCEL ? "/tmp/images" : path.join(__dirname, "images"));
 
 app.use(express.static(publicDir));
-app.use("/images", express.static(imagesDir));
-
-try {
-  if (!fs.existsSync(imagesDir)) {
-    fs.mkdirSync(imagesDir, { recursive: true });
-  }
-} catch (error) {
-  console.warn("Could not create images directory (expected on serverless environments):", error.message);
-}
 
 const roomSnapshots = new Map();
 
@@ -112,36 +102,6 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", (reason) => {
     console.log(`[${new Date().toISOString()}] Disconnected: ${reason}`);
-  });
-});
-
-app.post("/save-image", (req, res) => {
-  const { imageData } = req.body;
-  if (!imageData || typeof imageData !== "string")
-    return res.status(400).json({ error: "imageData required" });
-
-  const matches = imageData.match(/^data:(image\/(png|jpeg|jpg));base64,(.+)$/);
-  if (!matches) return res.status(400).json({ error: "invalid image data" });
-  const ext = matches[2] === "png" ? "png" : "jpg";
-  const data = matches[3];
-  const buffer = Buffer.from(data, "base64");
-  const filename = `image-${Date.now()}.${ext}`;
-  const filePath = path.join(imagesDir, filename);
-
-  fs.writeFile(filePath, buffer, (err) => {
-    if (err) {
-      console.error("Failed to save image", err);
-      return res.status(500).json({ error: "save failed" });
-    }
-    res.json({ url: `/images/${filename}` });
-  });
-});
-
-app.get("/list-images", (req, res) => {
-  fs.readdir(imagesDir, (err, files) => {
-    if (err) return res.json([]);
-    const images = files.filter((f) => /\.(png|jpe?g)$/i.test(f)).map((f) => `/images/${f}`);
-    res.json(images);
   });
 });
 
