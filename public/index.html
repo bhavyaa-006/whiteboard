@@ -62,41 +62,53 @@
         <button type="button" class="tool-btn active" data-tool="pen" title="Pen"><i data-lucide="pen"></i></button>
         <button type="button" class="tool-btn" data-tool="eraser" title="Eraser"><i data-lucide="eraser"></i></button>
         <div class="divider"></div>
-        <button type="button" class="tool-btn" data-tool="line" title="Line"><i data-lucide="minus"></i></button>
-        <button type="button" class="tool-btn" data-tool="rectangle" title="Rectangle"><i data-lucide="square"></i></button>
-        <button type="button" class="tool-btn" data-tool="circle" title="Circle"><i data-lucide="circle"></i></button>
-        <button type="button" class="tool-btn" data-tool="triangle" title="Triangle"><i data-lucide="triangle"></i></button>
+        
+        <!-- Shapes Popout -->
+        <div class="popout-container" id="shapePopoutContainer">
+          <button type="button" class="tool-btn" id="shapeMenuBtn" title="Shapes"><i data-lucide="square"></i></button>
+          <div class="popout-menu" id="shapePopout" hidden>
+            <button type="button" class="tool-btn" data-tool="line" title="Line"><i data-lucide="minus"></i></button>
+            <button type="button" class="tool-btn" data-tool="rectangle" title="Rectangle"><i data-lucide="square"></i></button>
+            <button type="button" class="tool-btn" data-tool="circle" title="Circle"><i data-lucide="circle"></i></button>
+            <button type="button" class="tool-btn" data-tool="triangle" title="Triangle"><i data-lucide="triangle"></i></button>
+          </div>
+        </div>
+
         <div class="divider"></div>
         <button type="button" class="tool-btn" data-tool="bucket" title="Fill Bucket"><i data-lucide="paint-bucket"></i></button>
-      </div>
-    </div>
+        <div class="divider"></div>
+        
+        <!-- Options Popout -->
+        <div class="popout-container" id="optionsPopoutContainer">
+          <button type="button" class="tool-btn" id="optionsMenuBtn" title="Tool Options"><i data-lucide="sliders-horizontal"></i></button>
+          <div class="popout-menu options-menu" id="optionsPopout" hidden>
+            <div id="strokeControls" class="prop-group">
+              <label>Stroke <input type="color" id="color" value="#000000"></label>
+              <label>Size <input id="size" type="range" min="1" max="30" value="4"></label>
+              <label>Brush
+                <select id="brush" class="modern-select">
+                  <option value="solid">Solid</option>
+                  <option value="dotted">Dotted</option>
+                  <option value="dashed">Dashed</option>
+                  <option value="spray">Spray</option>
+                </select>
+              </label>
+            </div>
 
-    <!-- Left Floating: Properties -->
-    <div id="propertiesPanel" class="floating-island middle-left">
-      <div id="strokeControls" class="prop-group">
-        <label>Stroke <input type="color" id="color" value="#000000"></label>
-        <label>Size <input id="size" type="range" min="1" max="30" value="4"></label>
-        <label>Brush
-          <select id="brush" class="modern-select">
-            <option value="solid">Solid</option>
-            <option value="dotted">Dotted</option>
-            <option value="dashed">Dashed</option>
-            <option value="spray">Spray</option>
-          </select>
-        </label>
-      </div>
+            <div class="divider-horizontal"></div>
 
-      <div class="divider-horizontal"></div>
+            <div id="fillControls" class="prop-group">
+              <label class="checkbox-label"><input type="checkbox" id="useFill"> Fill Shape</label>
+              <label>Fill <input type="color" id="fillColor" value="#FF0000" disabled></label>
+            </div>
+            
+            <div class="divider-horizontal"></div>
 
-      <div id="fillControls" class="prop-group">
-        <label class="checkbox-label"><input type="checkbox" id="useFill"> Fill Shape</label>
-        <label>Fill <input type="color" id="fillColor" value="#FF0000" disabled></label>
-      </div>
-      
-      <div class="divider-horizontal"></div>
-
-      <div id="transformControls" class="prop-group">
-        <label>Rotation <input id="rotation" type="range" min="0" max="359" value="0" disabled></label>
+            <div id="transformControls" class="prop-group">
+              <label>Rotation <input id="rotation" type="range" min="0" max="359" value="0" disabled></label>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -132,22 +144,72 @@
 
     // Sync UI tool buttons with hidden #shape select
     const shapeSelect = document.getElementById('shape');
-    const toolBtns = document.querySelectorAll('.tool-btn');
+    const toolBtns = document.querySelectorAll('.tool-btn[data-tool]');
+    const shapeMenuBtn = document.getElementById('shapeMenuBtn');
+    const shapePopout = document.getElementById('shapePopout');
+    const shapePopoutContainer = document.getElementById('shapePopoutContainer');
     
+    const optionsMenuBtn = document.getElementById('optionsMenuBtn');
+    const optionsPopout = document.getElementById('optionsPopout');
+    const optionsPopoutContainer = document.getElementById('optionsPopoutContainer');
+
+    // Toggle popouts
+    shapeMenuBtn.addEventListener('click', (e) => {
+      shapePopout.hidden = !shapePopout.hidden;
+      optionsPopout.hidden = true;
+      e.stopPropagation();
+    });
+
+    optionsMenuBtn.addEventListener('click', (e) => {
+      optionsPopout.hidden = !optionsPopout.hidden;
+      shapePopout.hidden = true;
+      e.stopPropagation();
+    });
+
+    // Close popouts when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!shapePopoutContainer.contains(e.target)) {
+        shapePopout.hidden = true;
+      }
+      if (!optionsPopoutContainer.contains(e.target)) {
+        optionsPopout.hidden = true;
+      }
+    });
+
+    // Handle tool selection
     toolBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         const tool = btn.getAttribute('data-tool');
         shapeSelect.value = tool;
-        // Dispatch change event so app.js picks it up
         shapeSelect.dispatchEvent(new Event('change'));
         
         // Update active class
         toolBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+
+        // Update shapeMenuBtn icon if a shape was selected
+        if (['line', 'rectangle', 'circle', 'triangle'].includes(tool)) {
+          const iconMap = {
+            'line': 'minus',
+            'rectangle': 'square',
+            'circle': 'circle',
+            'triangle': 'triangle'
+          };
+          shapeMenuBtn.innerHTML = `<i data-lucide="${iconMap[tool]}"></i>`;
+          lucide.createIcons();
+          shapeMenuBtn.classList.add('active');
+        } else {
+          shapeMenuBtn.classList.remove('active');
+        }
+        
+        // Hide popout after selecting a shape
+        if (btn.closest('#shapePopout')) {
+          shapePopout.hidden = true;
+        }
       });
     });
 
-    // Listen to changes from app.js if it modifies shapeSelect programmatically
+    // Listen to changes from app.js
     shapeSelect.addEventListener('change', () => {
       const tool = shapeSelect.value;
       toolBtns.forEach(b => {
