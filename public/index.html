@@ -7,25 +7,16 @@
   <link rel="icon" type="image/png" href="/whiteboard.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Patrick+Hand&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
-  <div class="page-doodles" aria-hidden="true"></div>
   <main id="launchPage">
     <section class="launchCard">
-      <div class="launchSticker launchSticker-left" aria-hidden="true">✎</div>
-      <div class="launchSticker launchSticker-right" aria-hidden="true">★</div>
-      <p class="launchEyebrow">Doodle notebook</p>
+      <p class="launchEyebrow">Whiteboard</p>
       <h1>Create or join a room</h1>
-      <p class="launchCopy">Start a fresh sketchbook board for yourself or jump into an existing room with a room code.</p>
-
-      <div class="launchChips" aria-hidden="true">
-        <span>Sticky notes</span>
-        <span>Sketch tools</span>
-        <span>Cozy rooms</span>
-      </div>
+      <p class="launchCopy">Start a fresh board for yourself or jump into an existing room with a room code.</p>
 
       <div class="launchActions">
         <button id="createRoom" type="button" class="launchPrimary">Create Room</button>
@@ -39,36 +30,22 @@
   </main>
 
   <div id="appShell" hidden>
-    <div class="paper-grain" aria-hidden="true"></div>
     
     <!-- Top Left: Room Controls -->
     <div id="roomIsland" class="floating-island top-left">
-      <div class="island-label">Room tab</div>
       <div class="island-row" id="roomControls">
-        <div class="doodle-logo" aria-hidden="true">✎</div>
         <div class="input-with-icon">
           <i data-lucide="users"></i>
           <input id="room" type="text" readonly>
         </div>
-        <div class="avatar-stack" aria-hidden="true">
-          <span class="avatar-chip avatar-a">Aa</span>
-          <span class="avatar-chip avatar-b">Bb</span>
-          <span class="avatar-chip avatar-c">✦</span>
-        </div>
         <button id="newRoom" class="icon-btn" type="button" title="New Room"><i data-lucide="plus"></i></button>
         <button id="copyRoom" class="icon-btn" type="button" title="Copy Link"><i data-lucide="link"></i></button>
-        <button class="icon-btn" type="button" title="Settings" aria-label="Settings"><i data-lucide="settings-2"></i></button>
       </div>
-      <div class="room-hint">Invite friends with the room code</div>
       <div id="connectionStatus" class="status-indicator">●</div>
     </div>
 
     <!-- Top Center: Toolbar -->
     <div id="toolBar" class="floating-island top-center">
-      <div class="toolbox-header">
-        <span class="toolbox-title">Stationery box</span>
-        <span class="toolbox-doodle" aria-hidden="true">✦</span>
-      </div>
       <div class="tool-group">
         <select id="shape" style="display:none;">
           <option value="select">Select</option>
@@ -157,7 +134,6 @@
 
     <!-- Top Right: Actions -->
     <div id="actionIsland" class="floating-island top-right">
-      <div class="action-label">Board bits</div>
       <button id="undo" class="icon-btn" type="button" title="Undo"><i data-lucide="undo"></i></button>
       <button id="redo" class="icon-btn" type="button" title="Redo"><i data-lucide="redo"></i></button>
       <div class="divider"></div>
